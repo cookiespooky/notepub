@@ -1,17 +1,10 @@
 import nodemailer from "nodemailer";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
-import { setDefaultResultOrder } from "node:dns";
-import { lookup } from "node:dns/promises";
-import net from "node:net";
 import { loadEnv } from "@notepub/env";
-
-// Prefer IPv6 during DNS resolution to work around IPv4 egress blocks
-setDefaultResultOrder("ipv6first");
 
 const env = loadEnv();
 const smtpHost = env.MAIL_HOST || "smtp.mail.ru";
-const socketHost = env.MAIL_SOCKET_HOST || smtpHost;
-const smtpPort = env.MAIL_PORT || 465;
+const smtpPort = env.MAIL_PORT || 587;
 
 function ensureMailEnv() {
   const missing = [];
@@ -27,12 +20,11 @@ function ensureMailEnv() {
 
 function parseSecureFlag() {
   const raw = env.MAIL_SECURE;
-  if (raw === "false" || raw === "0") return false;
-  return true;
+  return raw === "true" || raw === "1";
 }
 
 const transportOptions: SMTPTransport.Options = {
-  host: smtpHost, // keep hostname for TLS/SNI validation
+  host: smtpHost,
   port: smtpPort,
   secure: parseSecureFlag(),
   auth: {
@@ -40,13 +32,7 @@ const transportOptions: SMTPTransport.Options = {
     pass: env.MAIL_PASS,
   },
   tls: {
-    servername: smtpHost, // SNI hostname even if socket uses IPv6 literal
-  },
-  // Force IPv6 socket to avoid blocked IPv4 egress
-  getSocket: (_opts, cb) => {
-    createIpv6Socket(socketHost, smtpPort)
-      .then((socket) => cb(null, { socket }))
-      .catch((err) => cb(err as Error, undefined as any));
+    servername: smtpHost,
   },
 };
 
@@ -62,19 +48,4 @@ export async function sendMail(to: string, subject: string, text: string, html?:
     text,
     html: html || text,
   });
-}
-
-async function createIpv6Socket(host: string, port: number) {
-  const address = isIpv6Literal(host) ? host : (await lookup(host, { family: 6 })).address;
-  return net.connect({
-    host: address,
-    port,
-    family: 6,
-    // ensure Node does not fall back to IPv4 (Happy Eyeballs)
-    autoSelectFamily: false,
-  });
-}
-
-function isIpv6Literal(value: string) {
-  return /^[0-9a-f:]+$/i.test(value);
 }
