@@ -37,7 +37,7 @@ const transportOptions: SMTPTransport.Options = {
     pass: env.MAIL_PASS,
   },
   tls: {
-    servername: env.MAIL_HOST, // keep SNI when using IPv6 literal
+    servername: env.MAIL_HOST,
   },
   // Force IPv6 socket to avoid blocked IPv4 egress
   getSocket: (_opts, cb) => {
