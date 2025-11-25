@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
 import { setDefaultResultOrder } from "node:dns";
+import { lookup } from "node:dns/promises";
+import net from "node:net";
 import { loadEnv } from "@notepub/env";
 
 // Prefer IPv6 during DNS resolution to work around IPv4 egress blocks
@@ -34,6 +36,15 @@ const transportOptions: SMTPTransport.Options = {
     user: env.MAIL_USER,
     pass: env.MAIL_PASS,
   },
+  tls: {
+    servername: env.MAIL_HOST, // keep SNI when using IPv6 literal
+  },
+  // Force IPv6 socket to avoid blocked IPv4 egress
+  getSocket: (_opts, cb) => {
+    createIpv6Socket(env.MAIL_HOST || "", env.MAIL_PORT || 465)
+      .then((socket) => cb(null, { socket }))
+      .catch((err) => cb(err as Error, undefined as any));
+  },
 };
 
 const transporter = nodemailer.createTransport(transportOptions);
@@ -48,4 +59,9 @@ export async function sendMail(to: string, subject: string, text: string, html?:
     text,
     html: html || text,
   });
+}
+
+async function createIpv6Socket(host: string, port: number) {
+  const { address } = await lookup(host, { family: 6 });
+  return net.connect({ host: address, port, family: 6 });
 }
