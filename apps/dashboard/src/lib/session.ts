@@ -2,11 +2,14 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { loadEnv } from "@notepub/env";
 import { getUserById } from "@notepub/core";
+import type { User } from "@prisma/client";
 
 const env = loadEnv();
 const COOKIE_NAME = env.SESSION_COOKIE_NAME;
 const SECRET = env.COOKIE_SECRET;
 const IS_PROD = env.NODE_ENV === "production";
+
+type CurrentUser = User & { emailVerified: boolean };
 
 type SessionPayload = {
   userId: string;
@@ -39,13 +42,14 @@ function decodeSession(value: string | undefined | null): SessionPayload | null 
   }
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<CurrentUser | null> {
   const sessionCookie = cookies().get(COOKIE_NAME)?.value;
   const session = decodeSession(sessionCookie);
   if (!session) return null;
   const user = await getUserById(session.userId);
   if (!user) return null;
-  return user;
+  const emailVerified = (user as Partial<User>).emailVerified ?? false;
+  return { ...user, emailVerified };
 }
 
 export function setSession(userId: string, emailVerified = false) {

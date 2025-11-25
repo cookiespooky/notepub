@@ -63,5 +63,11 @@ export async function sendMail(to: string, subject: string, text: string, html?:
 
 async function createIpv6Socket(host: string, port: number) {
   const { address } = await lookup(host, { family: 6 });
-  return net.connect({ host: address, port, family: 6 });
+  return net.connect({
+    host: address,
+    port,
+    family: 6,
+    // ensure Node does not fall back to IPv4 (Happy Eyeballs)
+    autoSelectFamily: false,
+  });
 }
