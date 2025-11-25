@@ -25,6 +25,7 @@ const transporter = nodemailer.createTransport({
   host: env.MAIL_HOST,
   port: env.MAIL_PORT || 465,
   secure: parseSecureFlag(),
+  family: 6, // prefer IPv6 to avoid blocked IPv4 egress
   auth: {
     user: env.MAIL_USER,
     pass: env.MAIL_PASS,
@@ -33,7 +34,6 @@ const transporter = nodemailer.createTransport({
 
 export async function sendMail(to: string, subject: string, text: string, html?: string) {
   ensureMailEnv();
-  console.log(env.MAIL_PASS);
   const from = env.MAIL_FROM || env.MAIL_USER || "no-reply@example.com";
   return transporter.sendMail({
     from,

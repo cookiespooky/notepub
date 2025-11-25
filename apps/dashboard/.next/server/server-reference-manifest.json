@@ -23,6 +23,14 @@
       "layer": {
         "app/dashboard/sites/page": "action-browser"
       }
+    },
+    "1e246559bf50157664a8272f6d1809f36c2cb77e": {
+      "workers": {
+        "app/login/page": "(action-browser)/../../node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fantonlozkin%2FDocuments%2Fobsidian-website%2Fapps%2Fdashboard%2Fsrc%2Fapp%2Flogin%2Factions.ts%22%2C%5B%22loginAction%22%5D%5D%5D&__client_imported__=true!"
+      },
+      "layer": {
+        "app/login/page": "action-browser"
+      }
     }
   },
   "edge": {},
