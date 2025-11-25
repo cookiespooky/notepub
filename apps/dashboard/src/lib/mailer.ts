@@ -1,5 +1,10 @@
 import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
+import { setDefaultResultOrder } from "node:dns";
 import { loadEnv } from "@notepub/env";
+
+// Prefer IPv6 during DNS resolution to work around IPv4 egress blocks
+setDefaultResultOrder("ipv6first");
 
 const env = loadEnv();
 
@@ -21,7 +26,7 @@ function parseSecureFlag() {
   return true;
 }
 
-const transporter = nodemailer.createTransport({
+const transportOptions: SMTPTransport.Options = {
   host: env.MAIL_HOST,
   port: env.MAIL_PORT || 465,
   secure: parseSecureFlag(),
@@ -29,7 +34,9 @@ const transporter = nodemailer.createTransport({
     user: env.MAIL_USER,
     pass: env.MAIL_PASS,
   },
-});
+};
+
+const transporter = nodemailer.createTransport(transportOptions);
 
 export async function sendMail(to: string, subject: string, text: string, html?: string) {
   ensureMailEnv();
