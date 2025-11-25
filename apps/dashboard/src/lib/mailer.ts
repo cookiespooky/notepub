@@ -9,6 +9,8 @@ import { loadEnv } from "@notepub/env";
 setDefaultResultOrder("ipv6first");
 
 const env = loadEnv();
+const smtpHost = env.MAIL_HOST || "smtp.mail.ru";
+const smtpPort = env.MAIL_PORT || 465;
 
 function ensureMailEnv() {
   const missing = [];
@@ -29,19 +31,19 @@ function parseSecureFlag() {
 }
 
 const transportOptions: SMTPTransport.Options = {
-  host: env.MAIL_HOST,
-  port: env.MAIL_PORT || 465,
+  host: smtpHost, // keep hostname for TLS/SNI validation
+  port: smtpPort,
   secure: parseSecureFlag(),
   auth: {
     user: env.MAIL_USER,
     pass: env.MAIL_PASS,
   },
   tls: {
-    servername: env.MAIL_HOST,
+    servername: smtpHost, // SNI hostname even if socket uses IPv6 literal
   },
   // Force IPv6 socket to avoid blocked IPv4 egress
   getSocket: (_opts, cb) => {
-    createIpv6Socket(env.MAIL_HOST || "", env.MAIL_PORT || 465)
+    createIpv6Socket(smtpHost, smtpPort)
       .then((socket) => cb(null, { socket }))
       .catch((err) => cb(err as Error, undefined as any));
   },
@@ -69,5 +71,6 @@ async function createIpv6Socket(host: string, port: number) {
     family: 6,
     // ensure Node does not fall back to IPv4 (Happy Eyeballs)
     autoSelectFamily: false,
+    ipv6Only: true,
   });
 }

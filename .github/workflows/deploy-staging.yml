@@ -97,4 +97,6 @@ jobs:
           fi
 
           npx prisma migrate deploy --schema ./packages/db/prisma/schema.prisma
-          pm2 startOrReload ecosystem.config.cjs --env "${APP_ENV}" --update-env
+          pm2 delete "notepub-dashboard-${APP_ENV}" >/dev/null 2>&1 || true
+          pm2 delete "notepub-renderer-${APP_ENV}" >/dev/null 2>&1 || true
+          pm2 start ecosystem.config.cjs --env "${APP_ENV}" --update-env
