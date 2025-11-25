@@ -21,16 +21,24 @@ function parseSecureFlag() {
   return true;
 }
 
-const transporter = nodemailer.createTransport({
-  host: env.MAIL_HOST,
-  port: env.MAIL_PORT || 465,
-  secure: parseSecureFlag(),
-  family: 6, // prefer IPv6 to avoid blocked IPv4 egress
-  auth: {
-    user: env.MAIL_USER,
-    pass: env.MAIL_PASS,
+const transporter = nodemailer.createTransport(
+  {
+    host: env.MAIL_HOST,
+    port: env.MAIL_PORT || 465,
+    secure: parseSecureFlag(),
+    family: 6, // prefer IPv6 to avoid blocked IPv4 egress
+    auth: {
+      user: env.MAIL_USER,
+      pass: env.MAIL_PASS,
+    },
   },
-});
+  {
+    // force IPv6 during DNS resolution (Node >= 18)
+    dnsLookup: (hostname, options, cb) => {
+      return nodemailer.dns.resolve(hostname, { family: 6 }, cb);
+    },
+  },
+);
 
 export async function sendMail(to: string, subject: string, text: string, html?: string) {
   ensureMailEnv();
