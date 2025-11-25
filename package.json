@@ -1,0 +1,13 @@
+{
+  "name": "notepub-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@10.9.0",
+  "scripts": {
+    "lint": "eslint ."
+  }
+}

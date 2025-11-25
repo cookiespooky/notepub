@@ -1,0 +1,35 @@
+:root {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --text: #222222;
+  --muted: #4a5560;
+  --accent: #0c4a6e;
+  --border: #e0e0e0;
+  --radius: 12px;
+  --font: "Inter", "Helvetica Neue", Arial, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: #093a57;
+}
+
+a:active {
+  color: #062a40;
+}

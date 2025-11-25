@@ -1,0 +1,111 @@
+.shell {
+  display: grid;
+  gap: 20px;
+  color: #222222;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header h1 {
+  margin: 0 0 6px 0;
+}
+
+.header p {
+  margin: 0;
+  color: #4a5560;
+}
+
+.primary {
+  background: #0c4a6e;
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 1px solid #0c4a6e;
+}
+
+.empty {
+  color: #4a5560;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: #222222;
+}
+
+.field input,
+.field textarea {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #222222;
+  font-family: inherit;
+}
+
+.field small {
+  color: #4a5560;
+}
+
+.error {
+  color: #f87171;
+  margin: 0;
+}
+
+.danger {
+  background: #ef4444;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+}
+
+.card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  background: #f6f6f6;
+  display: grid;
+  gap: 6px;
+  color: #222222;
+}
+
+.cardHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #4a5560;
+}
+
+.slug {
+  font-weight: 600;
+}
+
+.pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f6f6f6;
+  color: #4a5560;
+  border: 1px solid #e0e0e0;
+  font-size: 12px;
+}
