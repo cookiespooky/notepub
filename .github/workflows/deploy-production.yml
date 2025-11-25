@@ -34,7 +34,7 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma client
-        run: npm exec prisma generate --schema packages/db/prisma/schema.prisma
+        run: npm exec prisma generate --schema ./packages/db/prisma/schema.prisma
 
       - name: Build apps
         run: |
@@ -90,4 +90,11 @@ jobs:
           fi
 
           cd "${RELEASE_DIR}"
+          if [ -f ".env" ]; then
+            set -a
+            . ./.env
+            set +a
+          fi
+
+          npm exec prisma migrate deploy --schema ./packages/db/prisma/schema.prisma
           pm2 startOrReload ecosystem.config.cjs --env "${APP_ENV}" --update-env
