@@ -10,6 +10,7 @@ setDefaultResultOrder("ipv6first");
 
 const env = loadEnv();
 const smtpHost = env.MAIL_HOST || "smtp.mail.ru";
+const socketHost = env.MAIL_SOCKET_HOST || smtpHost;
 const smtpPort = env.MAIL_PORT || 465;
 
 function ensureMailEnv() {
@@ -43,7 +44,7 @@ const transportOptions: SMTPTransport.Options = {
   },
   // Force IPv6 socket to avoid blocked IPv4 egress
   getSocket: (_opts, cb) => {
-    createIpv6Socket(smtpHost, smtpPort)
+    createIpv6Socket(socketHost, smtpPort)
       .then((socket) => cb(null, { socket }))
       .catch((err) => cb(err as Error, undefined as any));
   },
@@ -64,7 +65,7 @@ export async function sendMail(to: string, subject: string, text: string, html?:
 }
 
 async function createIpv6Socket(host: string, port: number) {
-  const { address } = await lookup(host, { family: 6 });
+  const address = isIpv6Literal(host) ? host : (await lookup(host, { family: 6 })).address;
   return net.connect({
     host: address,
     port,
@@ -72,4 +73,8 @@ async function createIpv6Socket(host: string, port: number) {
     // ensure Node does not fall back to IPv4 (Happy Eyeballs)
     autoSelectFamily: false,
   });
+}
+
+function isIpv6Literal(value: string) {
+  return /^[0-9a-f:]+$/i.test(value);
 }

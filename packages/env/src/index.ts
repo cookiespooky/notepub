@@ -20,6 +20,7 @@ export const envSchema = z.object({
   MAIL_SECURE: z
     .union([z.literal("true"), z.literal("false"), z.literal("1"), z.literal("0")])
     .optional(),
+  MAIL_SOCKET_HOST: z.string().optional(),
   MAIL_FROM_LEADS: z.string().optional(),
   APP_URL: z.string().url().optional(),
 });
