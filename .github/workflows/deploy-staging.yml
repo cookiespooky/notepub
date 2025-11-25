@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write env file for build
+        run: printf "%s" "${{ secrets.STAGING_DOTENV }}" > .env
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
