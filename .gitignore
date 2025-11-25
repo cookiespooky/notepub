@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,16 +13,21 @@
 
 # testing
 /coverage
+**/coverage
 
 # next.js
 /.next/
+**/.next/
 /out/
+**/out/
 
 # production
 /build
+**/build
 
 # misc
 .DS_Store
+.eslintcache
 *.pem
 
 # debug
@@ -35,6 +41,7 @@ yarn-error.log*
 
 # vercel
 .vercel
+**/.vercel
 
 # typescript
 *.tsbuildinfo
@@ -42,3 +49,4 @@ next-env.d.ts
 
 # cache
 cache/
+**/.turbo/
