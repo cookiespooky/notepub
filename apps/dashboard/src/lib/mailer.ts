@@ -14,7 +14,7 @@ function ensureMailEnv() {
   if (!env.MAIL_PASS) missing.push("MAIL_PASS");
   if (!env.MAIL_FROM) missing.push("MAIL_FROM");
   if (missing.length > 0) {
-    throw new Error(`Missing mail configuration: ${missing.join(", ")}`);
+    throw new Error(`Missing mail configuration: ${missing.join(", ")}`); //
   }
 }
 
