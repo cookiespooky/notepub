@@ -35,11 +35,11 @@ jobs:
 
       - name: Build apps
         run: |
-          npm run build --workspace @notepub/dashboard
-          npm run build --workspace @notepub/renderer
-        env:
-          NODE_ENV: production
-          APP_ENV: ${{ env.APP_ENV }}
+          set -a
+          . ./.env
+          set +a
+          NODE_ENV=production APP_ENV=${APP_ENV:-staging} npm run build --workspace @notepub/dashboard
+          NODE_ENV=production APP_ENV=${APP_ENV:-staging} npm run build --workspace @notepub/renderer
 
       - name: Prune dev dependencies
         run: npm prune --omit=dev --workspaces --include-workspace-root
