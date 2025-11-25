@@ -71,6 +71,5 @@ async function createIpv6Socket(host: string, port: number) {
     family: 6,
     // ensure Node does not fall back to IPv4 (Happy Eyeballs)
     autoSelectFamily: false,
-    ipv6Only: true,
   });
 }
