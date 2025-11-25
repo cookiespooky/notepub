@@ -1,4 +1,4 @@
-import nodemailer, { type TransportOptions } from "nodemailer";
+import nodemailer from "nodemailer";
 import { loadEnv } from "@notepub/env";
 
 const env = loadEnv();
@@ -21,22 +21,15 @@ function parseSecureFlag() {
   return true;
 }
 
-const smtpOptions: TransportOptions = {
+const transporter = nodemailer.createTransport({
   host: env.MAIL_HOST,
   port: env.MAIL_PORT || 465,
   secure: parseSecureFlag(),
-  family: 6, // prefer IPv6 to avoid blocked IPv4 egress
   auth: {
     user: env.MAIL_USER,
     pass: env.MAIL_PASS,
   },
-  // force IPv6 during DNS resolution (Node >= 18)
-  dnsLookup: (hostname, _options, cb) => {
-    return nodemailer.dns.resolve(hostname, { family: 6 }, cb);
-  },
-};
-
-const transporter = nodemailer.createTransport(smtpOptions);
+});
 
 export async function sendMail(to: string, subject: string, text: string, html?: string) {
   ensureMailEnv();
