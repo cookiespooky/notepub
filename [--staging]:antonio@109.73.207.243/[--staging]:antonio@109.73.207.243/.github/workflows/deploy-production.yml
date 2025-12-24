@@ -1,0 +1,102 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 20
+  APP_ENV: production
+  DEPLOY_ROOT: /home/antonio/notepub
+  ENV_FILE: /home/antonio/notepub/env/.env
+  ARTIFACT_NAME: notepub-build
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write env file for build
+        env:
+          PROD_DOTENV: ${{ secrets.PROD_DOTENV }}
+        run: |
+          printf '%s' "$PROD_DOTENV" > .env
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema ./packages/db/prisma/schema.prisma
+
+      - name: Build apps
+        run: |
+          set -a
+          . ./.env
+          set +a
+          NODE_ENV=production APP_ENV=${APP_ENV:-production} npm run build --workspace @notepub/dashboard
+          NODE_ENV=production APP_ENV=${APP_ENV:-production} npm run build --workspace @notepub/renderer
+
+      - name: Prune dev dependencies
+        run: npm prune --omit=dev --workspaces --include-workspace-root
+
+      - name: Create release artifact
+        run: |
+          tar czf artifact.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='**/.env*' \
+            --exclude='**/.next/cache' \
+            --exclude='**/node_modules/.cache' \
+            ecosystem.config.cjs package.json package-lock.json apps packages node_modules tsconfig.base.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: artifact.tar.gz
+          retention-days: 3
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: /tmp/notepub-release
+
+      - name: Deploy to production
+        run: |
+          set -euo pipefail
+          TS="$(date -u +%Y%m%d_%H%M%S)"
+          RELEASE_DIR="${DEPLOY_ROOT}/releases/${TS}"
+
+          mkdir -p "${RELEASE_DIR}"
+          tar xzf /tmp/notepub-release/artifact.tar.gz -C "${RELEASE_DIR}"
+
+          ln -sfn "${RELEASE_DIR}" "${DEPLOY_ROOT}/current"
+
+          if [ -f "${ENV_FILE}" ]; then
+            ln -sfn "${ENV_FILE}" "${RELEASE_DIR}/.env"
+          fi
+
+          cd "${RELEASE_DIR}"
+          if [ -f ".env" ]; then
+            set -a
+            . ./.env
+            set +a
+          fi
+
+          npx prisma migrate deploy --schema ./packages/db/prisma/schema.prisma
+          pm2 delete "notepub-dashboard-${APP_ENV}" >/dev/null 2>&1 || true
+          pm2 delete "notepub-renderer-${APP_ENV}" >/dev/null 2>&1 || true
+          pm2 start ecosystem.config.cjs --env "${APP_ENV}" --update-env

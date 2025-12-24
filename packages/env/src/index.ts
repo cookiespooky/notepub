@@ -12,6 +12,7 @@ export const envSchema = z.object({
   S3_PREFIX: z.string().optional(),
   COOKIE_SECRET: z.string().min(16, "COOKIE_SECRET must be at least 16 chars"),
   SESSION_COOKIE_NAME: z.string().default("notepub_session"),
+  COOKIE_DOMAIN: z.string().optional(),
   MAIL_HOST: z.string().optional(),
   MAIL_PORT: z.coerce.number().optional(),
   MAIL_USER: z.string().optional(),
@@ -23,6 +24,7 @@ export const envSchema = z.object({
   MAIL_SOCKET_HOST: z.string().optional(),
   MAIL_FROM_LEADS: z.string().optional(),
   APP_URL: z.string().url().optional(),
+  MULTISITE_ALLOWLIST: z.string().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

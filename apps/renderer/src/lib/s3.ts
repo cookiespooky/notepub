@@ -1,4 +1,12 @@
-import { GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getS3Config } from "./config";
 import { S3ObjectEntry } from "./types";
@@ -51,6 +59,97 @@ export async function listNoteObjects(customPrefix?: string): Promise<S3ObjectEn
   } while (continuationToken);
 
   return entries;
+}
+
+export async function listFolderPlaceholders(customPrefix?: string): Promise<S3ObjectEntry[]> {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const effectivePrefix = buildPrefix(basePrefix, customPrefix);
+  let continuationToken: string | undefined;
+  const entries: S3ObjectEntry[] = [];
+
+  do {
+    const result = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: effectivePrefix || undefined,
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const object of result.Contents || []) {
+      if (!object.Key || object.Key.endsWith("/")) continue;
+      if (!object.Key.toLowerCase().endsWith("/.keep")) continue;
+      const relativeKey = stripBasePrefix(object.Key, effectivePrefix);
+      entries.push({
+        key: relativeKey,
+        etag: object.ETag?.replace(/"/g, "") || "",
+        lastModified: object.LastModified?.toISOString() || null,
+        size: typeof object.Size === "number" ? object.Size : undefined,
+      });
+    }
+    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return entries;
+}
+
+export async function putObject(key: string, body: string, customPrefix?: string) {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const targetKey = buildTargetKey(key, basePrefix, customPrefix);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: targetKey,
+      Body: body,
+    }),
+  );
+  return { key: targetKey };
+}
+
+export async function putBinaryObject(key: string, body: Buffer, customPrefix?: string, contentType?: string) {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const targetKey = buildTargetKey(key, basePrefix, customPrefix);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: targetKey,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return { key: targetKey };
+}
+
+export async function deleteObject(key: string, customPrefix?: string) {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const targetKey = buildTargetKey(key, basePrefix, customPrefix);
+  await s3.send(
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: targetKey,
+    }),
+  );
+  return { key: targetKey };
+}
+
+export async function copyObject(fromKey: string, toKey: string, customPrefix?: string) {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const sourceKey = buildTargetKey(fromKey, basePrefix, customPrefix);
+  const targetKey = buildTargetKey(toKey, basePrefix, customPrefix);
+  const encodedSource = encodeURIComponent(`/${bucket}/${sourceKey}`);
+  await s3.send(
+    new CopyObjectCommand({
+      Bucket: bucket,
+      CopySource: encodedSource,
+      Key: targetKey,
+    }),
+  );
+  return { key: targetKey };
 }
 
 function normalizePrefix(input: string | null | undefined) {
@@ -115,6 +214,20 @@ export async function getSignedObjectUrl(key: string, expiresIn = 3600) {
   );
 }
 
+export async function getSignedObjectUrlWithPrefix(key: string, customPrefix?: string, expiresIn = 3600) {
+  const s3 = getClient();
+  const { bucket, prefix: basePrefix } = getS3Config();
+  const targetKey = buildTargetKey(key, basePrefix, customPrefix);
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: targetKey,
+    }),
+    { expiresIn },
+  );
+}
+
 async function streamToString(body: unknown) {
   if (!body) return "";
   if (typeof body === "string") return body;
@@ -161,4 +274,11 @@ function stripBasePrefix(key: string, basePrefix: string) {
     return normalizedKey.slice(basePrefix.length);
   }
   return normalizedKey;
+}
+
+function buildTargetKey(key: string, basePrefix: string, customPrefix?: string) {
+  const normalizedKey = key.replace(/^\/+/, "");
+  const effectivePrefix = buildPrefix(basePrefix, customPrefix);
+  if (!effectivePrefix) return normalizedKey;
+  return `${effectivePrefix}${normalizedKey}`;
 }

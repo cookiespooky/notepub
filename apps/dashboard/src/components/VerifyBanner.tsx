@@ -12,15 +12,17 @@ export function VerifyBanner({ email, verified }: { email: string; verified: boo
   if (verified) return null;
 
   const onSend = () => {
-    startTransition(async () => {
-      const res = await resendVerificationAction();
-      if (res.error) {
-        setStatus("error");
-        setMessage(res.error);
-      } else {
-        setStatus("sent");
-        setMessage(res.success || "");
-      }
+    startTransition(() => {
+      void (async () => {
+        const res = await resendVerificationAction();
+        if (res.error) {
+          setStatus("error");
+          setMessage(res.error);
+        } else {
+          setStatus("sent");
+          setMessage(res.success || "");
+        }
+      })();
     });
   };
 

@@ -1,1 +1,6 @@
-{}
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/sync-tokens/route": "app/api/sync-tokens/route.js",
+  "/dashboard/sites/page": "app/dashboard/sites/page.js",
+  "/dashboard/sites/[id]/page": "app/dashboard/sites/[id]/page.js"
+}

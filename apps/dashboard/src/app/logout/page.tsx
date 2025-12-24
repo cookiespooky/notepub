@@ -5,10 +5,10 @@ export default function LogoutPage() {
   return (
     <main className={styles.shell}>
       <div className={styles.card}>
-        <h1 className={styles.title}>Выйти</h1>
+        <h1 className={styles.title}>Выйти из аккаунта?</h1>
         <form action={logoutAction} className={styles.form}>
           <button type="submit" className={styles.primary}>
-            Logout
+            Выйти
           </button>
         </form>
       </div>

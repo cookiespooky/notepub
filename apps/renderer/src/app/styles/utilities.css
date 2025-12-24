@@ -1,0 +1,46 @@
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.stack-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.cluster-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.cluster-md {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.pad-sm {
+  padding: var(--space-12);
+}
+
+.pad-md {
+  padding: var(--space-16);
+}
+
+.pad-lg {
+  padding: var(--space-24);
+}
+
+.max-readable {
+  max-width: 960px;
+  width: 100%;
+}

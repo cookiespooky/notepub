@@ -13,11 +13,14 @@ model User {
   emailVerified Boolean @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  quotaBytes BigInt    @default(10485760)
+  usedBytes  BigInt    @default(0)
   password   Password?
   sites      Site[]
   verificationCodes EmailVerificationCode[]
   resetTokens PasswordResetToken[]
   submissions FormSubmission[]
+  syncTokens SyncToken[]
 }
 
 model Password {
@@ -34,13 +37,18 @@ model Site {
   slug      String   @unique
   title     String
   s3Prefix  String
+  vaultQuotaBytes BigInt @default(10485760)
+  vaultUsedBytes  BigInt @default(0)
   ogImageUrl     String?
   ogDescription  String?
+  hideSidebarOnHome Boolean @default(false)
+  yandexMetrikaId  String?
   ownerId   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   owner     User     @relation(fields: [ownerId], references: [id])
   submissions FormSubmission[]
+  syncTokens SyncToken[]
 }
 
 model EmailVerificationCode {
@@ -83,4 +91,22 @@ model FormSubmission {
   @@index([siteId])
   @@index([ownerId])
   @@index([formId])
+}
+
+model SyncToken {
+  id         String   @id @default(cuid())
+  userId     String
+  siteId     String?
+  tokenHash  String
+  label      String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+  isActive   Boolean  @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+  site Site? @relation(fields: [siteId], references: [id])
+
+  @@index([userId])
+  @@index([siteId])
+  @@index([isActive])
 }

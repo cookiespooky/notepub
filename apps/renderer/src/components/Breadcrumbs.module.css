@@ -1,28 +1,58 @@
 .trail {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  color: var(--muted);
+  gap: var(--space-8);
+  margin-bottom: var(--space-20);
+  margin-top: var(--space-20);
+  color: #aaa;
   font-size: 0.95rem;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.trail span {
+  white-space: wrap;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
 }
 
 .link {
-  color: var(--accent);
-  text-decoration: underline;
+  color: #888;
   text-underline-offset: 4px;
   margin-right: 8px;
+  line-height: 0;
 }
 
 .link:hover {
-  color: #093a57;
+  color: #555;
 }
 
 .link:active {
-  color: #062a40;
+  color: #333;
 }
 
-.current {
-  color: var(--text);
+/*.current {
+  color: #333;
   font-weight: 600;
+  margin-right: 8px;
+}*/
+
+.separator {
+  display: inline-flex;
+  align-items: center;
+}
+
+.homeIcon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+@media (max-width: 960px) {
+  .trail {
+    margin-top: 10px;
+  }
 }

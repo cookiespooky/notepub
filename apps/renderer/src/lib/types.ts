@@ -5,14 +5,15 @@ export type S3ObjectEntry = {
   size?: number;
 };
 
-export type IndexTreeNode = {
-  title: string;
-  path: string[];
-  children: {
+export type CategoryIndex = {
+  name: string;
+  slug: string;
+  notes: {
     title: string;
     slug: string;
+    isDraft?: boolean;
+    isHome?: boolean;
   }[];
-  folders?: IndexTreeNode[];
 };
 
 export type FlatNoteIndex = {
@@ -20,43 +21,35 @@ export type FlatNoteIndex = {
   relativeKey: string;
   title: string;
   slug: string;
+  category: string | null;
+  categorySlug?: string | null;
   tags: string[];
   html: string;
+  preview: string;
+  created: string | null;
+  updated: string | null;
+  breadcrumbs: { title: string; href: string | null }[];
+  isHome?: boolean;
   etag?: string;
+  isDraft?: boolean;
 };
 
 export type IndexResponse = {
-  tree: IndexTreeNode[];
+  categories: CategoryIndex[];
   flat: FlatNoteIndex[];
 };
 
 export type NoteResponse = {
   slug: string;
   title: string;
+  category: string | null;
   html: string;
+  preview: string;
   tags: string[];
   created: string | null;
   updated: string | null;
   breadcrumbs?: { title: string; href: string | null }[];
+  isDraft?: boolean;
 };
 
-export type FolderListing = {
-  title: string;
-  slugPath: string[];
-  path: string[];
-  breadcrumbs: { title: string; href: string | null }[];
-  folders: { title: string; slugPath: string[] }[];
-  notes: { title: string; slug: string }[];
-};
-
-export type FolderMeta = {
-  path: string;
-  title?: string;
-  slug?: string;
-  etag?: string;
-  renderVersion?: string;
-};
-
-export type IndexData = IndexResponse & {
-  folderMeta: Map<string, FolderMeta>;
-};
+export type IndexData = IndexResponse;

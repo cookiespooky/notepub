@@ -1,0 +1,33 @@
+.previewContainer {
+  position: relative;
+}
+
+.preview {
+  position: fixed;
+  transform: none;
+  max-width: min(360px, calc(100vw - 24px));
+  min-width: min(260px, calc(100vw - 24px));
+  background: rgba(21, 21, 24, 0.95);
+  color: #f5f7fb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  z-index: 2000;
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.title {
+  font-weight: 700;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.snippet {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(245, 247, 251, 0.9);
+}

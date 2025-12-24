@@ -9,7 +9,7 @@ export async function GET() {
     // hide storage key from public response
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const flat = data.flat.map(({ key: _key, ...rest }) => rest);
-    return NextResponse.json({ tree: data.tree, flat });
+    return NextResponse.json({ categories: data.categories, flat });
   } catch (error: unknown) {
     console.error("Failed to build index", error);
     return NextResponse.json({ error: "Failed to load index" }, { status: 500 });

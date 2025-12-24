@@ -1,137 +1,198 @@
-import crypto from "crypto";
 import matter from "gray-matter";
 import path from "path";
 import { markdownToHtml } from "./markdown";
 import { fetchObject, listNoteObjects } from "./s3";
 import { getS3Config } from "./config";
-import { resolveFolderSlugs, slugFromPathSegments, slugifySegment } from "./slug";
-import { FlatNoteIndex, FolderListing, FolderMeta, IndexData, IndexTreeNode, NoteResponse, S3ObjectEntry } from "./types";
+import { slugifySegment } from "./slug";
+import { CategoryIndex, FlatNoteIndex, IndexData, NoteResponse, S3ObjectEntry } from "./types";
 
-type NoteCache = NoteResponse & {
-  key: string;
-  relativeKey: string;
-  etag: string;
-  renderVersion: string;
-};
-
-const NOTE_RENDER_VERSION = "19-folder-pages";
-const INDEX_RENDER_VERSION = "19-folder-pages";
-const FOLDER_RENDER_VERSION = "9-folder-raw-slug";
-
-function hashList(objects: S3ObjectEntry[]) {
-  const sorted = [...objects].sort((a, b) => a.key.localeCompare(b.key));
-  const hash = crypto.createHash("md5");
-  for (const entry of sorted) {
-    hash.update(entry.key);
-    hash.update(entry.etag);
-    hash.update(entry.lastModified || "");
-  }
-  return hash.digest("hex");
-}
-
-export async function getIndexData(prefix?: string): Promise<IndexData> {
+export async function getIndexData(prefix?: string, opts?: { includeDrafts?: boolean }): Promise<IndexData> {
+  const includeDrafts = opts?.includeDrafts ?? false;
   const objects = await listNoteObjects(prefix);
-  const listEtag = hashList(objects);
-
-  const folderMeta = await buildFolderMeta(objects, prefix);
+  const sortedObjects = sortEntries(objects);
+  const rawNotes = await loadRawNotes(sortedObjects, prefix);
+  const slugLookup = buildSlugLookup(rawNotes);
 
   const flat: FlatNoteIndex[] = [];
-  for (const entry of objects) {
-    if (isFolderIndex(entry.key)) continue;
-    const note = await loadNote(entry, folderMeta, undefined, prefix);
+  for (const note of rawNotes) {
+    if (note.isDraft && !includeDrafts) continue;
+    const html = await markdownToHtml(note.content, {
+      objectKey: note.entry.key,
+      s3Prefix: prefix,
+      slugLookup,
+    });
+    const breadcrumbs = buildBreadcrumbs(note.category, note.slug, note.title);
     flat.push({
-      key: note.key,
+      key: note.entry.key,
       relativeKey: note.relativeKey,
       title: note.title,
       slug: note.slug,
+      category: note.category,
+      categorySlug: note.category ? slugifySegment(note.category) || null : null,
       tags: note.tags,
-      html: note.html,
+      html,
+      preview: note.preview,
+      created: note.created,
+      updated: note.updated,
+      breadcrumbs,
+      etag: note.entry.etag,
+      isHome: note.isHome,
+      isDraft: note.isDraft,
     });
   }
 
-  const tree = buildTree(flat, folderMeta);
-  return { tree, flat, folderMeta };
+  const categories = buildCategories(flat);
+  return { categories, flat };
 }
 
-export async function getNoteBySlug(slug: string, prefix?: string): Promise<NoteResponse | null> {
-  const index = await getIndexData(prefix);
+export type RawNote = {
+  entry: S3ObjectEntry;
+  relativeKey: string;
+  title: string;
+  baseName: string;
+  slug: string;
+  category: string | null;
+  tags: string[];
+  created: string | null;
+  updated: string | null;
+  content: string;
+  preview: string;
+  aliases: string[];
+  isHome: boolean;
+  isDraft: boolean;
+  frontmatter: Record<string, unknown>;
+};
+
+export async function getRawNotes(prefix?: string, opts?: { includeDrafts?: boolean }): Promise<RawNote[]> {
+  const includeDrafts = opts?.includeDrafts ?? false;
+  const objects = await listNoteObjects(prefix);
+  const sortedObjects = sortEntries(objects);
+  const rawNotes = await loadRawNotes(sortedObjects, prefix);
+  return includeDrafts ? rawNotes : rawNotes.filter((note) => !note.isDraft);
+}
+
+export async function getNoteBySlug(
+  slug: string,
+  prefix?: string,
+  opts?: { includeDrafts?: boolean },
+): Promise<NoteResponse | null> {
+  const index = await getIndexData(prefix, opts);
   const entry = index.flat.find((item) => item.slug === slug);
   if (!entry) return null;
-  const note = await loadNote(
-    {
-      key: entry.key,
-      etag: entry.etag || "",
-      lastModified: null,
-    },
-    index.folderMeta,
-    entry.slug,
-    prefix,
-  );
-  return note;
-}
-
-export async function getFolderBySlugPath(slugPath: string[], prefix?: string): Promise<FolderListing | null> {
-  const index = await getIndexData(prefix);
-  const target = findFolderNodeBySlugPath(index.tree, index.folderMeta, slugPath);
-  if (!target) return null;
-
-  const folderSlugs = resolveFolderSlugs(target.path, index.folderMeta);
-  const accumulatedCrumbs: { title: string; href: string | null }[] = [];
-  for (let i = 0; i < target.path.length; i++) {
-    const href = `/folders/${folderSlugs.slice(0, i + 1).join("/")}`;
-    const meta = index.folderMeta.get(target.path.slice(0, i + 1).join("/"));
-    accumulatedCrumbs.push({ title: meta?.title || target.path[i], href });
-  }
-
   return {
-    title: target.title,
-    path: target.path,
-    slugPath,
-    breadcrumbs: accumulatedCrumbs,
-    folders: (target.folders || []).map((f) => ({
-      title: f.title,
-      slugPath: resolveFolderSlugs(f.path, index.folderMeta),
-    })),
-    notes: target.children.map((n) => ({ title: n.title, slug: n.slug })),
+    slug: entry.slug,
+    title: entry.title,
+    category: entry.category,
+    html: entry.html,
+    preview: entry.preview,
+    tags: entry.tags,
+    created: entry.created,
+    updated: entry.updated,
+    breadcrumbs: entry.breadcrumbs,
+    isDraft: entry.isDraft,
   };
 }
 
-async function loadNote(entry: S3ObjectEntry, folderMeta: Map<string, FolderMeta>, slugOverride?: string, prefix?: string): Promise<NoteCache> {
-  const remote = await fetchObject(entry.key);
+type SlugLookup = {
+  byPath: Map<string, string>;
+  byName: Map<string, string[]>;
+  byAlias: Map<string, string[]>;
+  folderIndexByName: Map<string, string[]>;
+};
 
-  const markdown = remote.body;
-  const parsed = matter(markdown);
-  const frontmatter = (parsed.data ?? {}) as Record<string, unknown>;
-  const relativeKey = stripPrefix(entry.key, prefix);
-  const title = typeof frontmatter.title === "string" ? frontmatter.title : deriveTitle(relativeKey);
-  const fmSlug = typeof frontmatter.slug === "string" ? frontmatter.slug.trim() : null;
-  const baseName = path.posix.basename(relativeKey, path.extname(relativeKey));
-  const slug =
-    slugOverride || buildSlugFromFolders(relativeKey, fmSlug || baseName, folderMeta, Boolean(fmSlug));
-  const tags = normalizeTags(frontmatter.tags);
-  const created = frontmatter.created ? String(frontmatter.created) : null;
-  const updated = frontmatter.updated ? String(frontmatter.updated) : remote.lastModified || entry.lastModified || null;
-  const html = await markdownToHtml(parsed.content, { objectKey: entry.key, folderMeta });
-  const breadcrumbs = buildBreadcrumbs(relativeKey, folderMeta, slug, title, prefix);
-  const payload: NoteCache = {
-    key: entry.key,
-    relativeKey,
-    etag: remote.etag || entry.etag || "",
-    slug,
-    title,
-    tags,
-    html,
-    created,
-    updated,
-    breadcrumbs,
-    renderVersion: NOTE_RENDER_VERSION,
-  };
-  return payload;
+async function loadRawNotes(objects: S3ObjectEntry[], prefix?: string): Promise<RawNote[]> {
+  const notes: RawNote[] = [];
+  for (const entry of objects) {
+    const remote = await fetchObject(entry.key);
+    const markdown = remote.body;
+    const parsed = matter(markdown);
+    const frontmatter = (parsed.data ?? {}) as Record<string, unknown>;
+    const fmSlug = typeof frontmatter.slug === "string" ? frontmatter.slug.trim() : "";
+    const relativeKeyRaw = stripPrefix(entry.key, prefix);
+    const relativeKey = safeDecode(relativeKeyRaw);
+    const baseName = path.posix.basename(relativeKey, path.extname(relativeKey));
+    const slug = fmSlug && !fmSlug.includes("/") ? fmSlug : baseName;
+    const title = deriveTitle(relativeKey, frontmatter);
+    const category = deriveCategoryFromPath(relativeKey);
+    const tags = normalizeTags(frontmatter.tags);
+    const created = frontmatter.created ? String(frontmatter.created) : null;
+    const updated = frontmatter.updated ? String(frontmatter.updated) : remote.lastModified || entry.lastModified || null;
+    const aliases = normalizeAliases(frontmatter.aliases);
+    const isRoot = relativeKey.split("/").filter(Boolean).length === 1;
+    const isHome = isRoot && frontmatter.home === true;
+    const isDraft = parseDraftFlag(frontmatter.draft);
+    notes.push({
+      entry,
+      relativeKey,
+      title,
+      baseName,
+      slug,
+      category,
+      tags,
+      created,
+      updated,
+      content: parsed.content,
+      preview: buildPreview(parsed.content),
+      aliases,
+      isHome,
+      isDraft,
+      frontmatter,
+    });
+  }
+  return notes;
 }
 
-function deriveTitle(key: string) {
-  const base = path.posix.basename(key, path.extname(key));
-  return unslugify(base);
+export function buildSlugLookup(notes: RawNote[]): SlugLookup {
+  const byPath = new Map<string, string>();
+  const byName = new Map<string, string[]>();
+  const byAlias = new Map<string, string[]>();
+  const folderIndexByName = new Map<string, string[]>();
+
+  for (const note of notes) {
+    const normalizedPath = note.relativeKey.endsWith(".md") ? note.relativeKey : `${note.relativeKey}.md`;
+    byPath.set(normalizedPath, note.slug);
+    const nameKey = note.baseName.trim().toLowerCase();
+    const existing = byName.get(nameKey) || [];
+    existing.push(normalizedPath);
+    byName.set(nameKey, existing);
+
+    const titleKey = note.title.trim().toLowerCase();
+    if (titleKey) {
+      const arr = byAlias.get(titleKey) || [];
+      arr.push(normalizedPath);
+      byAlias.set(titleKey, arr);
+    }
+    for (const alias of note.aliases) {
+      const key = alias.trim().toLowerCase();
+      if (!key) continue;
+      const arr = byAlias.get(key) || [];
+      arr.push(normalizedPath);
+      byAlias.set(key, arr);
+    }
+
+    const slugAlias = note.slug.trim().toLowerCase();
+    if (slugAlias) {
+      const arr = byAlias.get(slugAlias) || [];
+      arr.push(normalizedPath);
+      byAlias.set(slugAlias, arr);
+    }
+  }
+  return { byPath, byName, byAlias, folderIndexByName };
+}
+
+function deriveTitle(key: string, frontmatter: Record<string, unknown>) {
+  const fmTitle = typeof frontmatter.title === "string" ? frontmatter.title.trim() : "";
+  if (fmTitle) return fmTitle;
+  const decoded = safeDecode(key);
+  const base = path.posix.basename(decoded, path.extname(decoded));
+  return base;
+}
+
+function deriveCategoryFromPath(relativeKey: string): string | null {
+  const parts = relativeKey.split("/").filter(Boolean);
+  if (parts.length <= 1) return null;
+  // Everything except the last segment (filename) is treated as category path.
+  return parts.slice(0, -1).join("/");
 }
 
 function normalizeTags(input: unknown): string[] {
@@ -146,101 +207,75 @@ function normalizeTags(input: unknown): string[] {
   return [];
 }
 
-function buildTree(flat: FlatNoteIndex[], folderMeta: Map<string, FolderMeta>): IndexTreeNode[] {
-  const root: IndexTreeNode = { title: "", path: [], children: [], folders: [] };
-  const nodeMap = new Map<string, IndexTreeNode>();
-  nodeMap.set("", root);
+function normalizeAliases(input: unknown): string[] {
+  if (!input) return [];
+  if (Array.isArray(input)) return input.map(String).filter(Boolean);
+  if (typeof input === "string") return input.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
 
-  const getOrCreateNode = (folderPath: string[]): IndexTreeNode => {
-    const key = folderPath.join("/");
-    if (nodeMap.has(key)) return nodeMap.get(key)!;
-    const parentPath = folderPath.slice(0, -1);
-    const parent = parentPath.length === 0 ? root : getOrCreateNode(parentPath);
-    const meta = folderMeta.get(key);
-    const node: IndexTreeNode = {
-      title: meta?.title || folderPath.at(-1) || "",
-      path: folderPath,
-      children: [],
-      folders: [],
-    };
-    parent.folders = parent.folders || [];
-    parent.folders.push(node);
-    nodeMap.set(key, node);
-    return node;
-  };
+function parseDraftFlag(input: unknown): boolean {
+  if (input === true) return true;
+  if (typeof input === "string") {
+    const normalized = input.trim().toLowerCase();
+    return normalized === "true" || normalized === "yes" || normalized === "1";
+  }
+  if (typeof input === "number") {
+    return input === 1;
+  }
+  return false;
+}
 
+function buildPreview(content: string, limit = 200) {
+  const withoutCode = content.replace(/```[\s\S]*?```/g, " ");
+  const withoutLinks = withoutCode.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  const plain = withoutLinks
+    .replace(/[*_`>#-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (plain.length <= limit) return plain;
+  return `${plain.slice(0, limit).trim()}…`;
+}
+
+function sortEntries(objects: S3ObjectEntry[]) {
+  return [...objects].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function buildCategories(flat: FlatNoteIndex[]): CategoryIndex[] {
+  const groups = new Map<string, CategoryIndex>();
   for (const note of flat) {
-    const segments = note.relativeKey.split("/").filter(Boolean);
-    const folderSegments = segments.slice(0, -1);
-    const node = getOrCreateNode(folderSegments);
-    node.children.push({ title: note.title, slug: note.slug });
-  }
-
-  return [root];
-}
-
-function findFolderNodeBySlugPath(tree: IndexTreeNode[], folderMeta: Map<string, FolderMeta>, slugPath: string[]) {
-  const rootSlug = slugPath[0];
-  const rootNode = tree.find((node) => node.path.length === 0) || null;
-  const levelOne = rootNode?.folders || tree;
-  let current: IndexTreeNode | undefined = levelOne.find((node) => {
-    const slugs = resolveFolderSlugs(node.path, folderMeta);
-    return slugs[slugs.length - 1] === rootSlug;
-  });
-  if (!current) return null;
-
-  for (let i = 1; i < slugPath.length; i++) {
-    const slug = slugPath[i];
-    const next: IndexTreeNode | undefined = (current.folders || []).find((folder) => {
-      const slugs = resolveFolderSlugs(folder.path, folderMeta);
-      return slugs[slugs.length - 1] === slug;
-    });
-    if (!next) return null;
-    current = next;
-  }
-  return current || null;
-}
-
-async function buildFolderMeta(objects: S3ObjectEntry[], prefix?: string) {
-  const folderMeta = new Map<string, FolderMeta>();
-  for (const entry of objects) {
-    if (!entry.key.toLowerCase().endsWith(".json")) continue;
-    if (!entry.key.toLowerCase().endsWith("_folder.json")) continue;
-    const raw = await fetchObject(entry.key);
-    if (raw.status !== 200) continue;
-    try {
-      const parsed = JSON.parse(raw.body) as FolderMeta;
-      folderMeta.set(stripPrefix(entry.key.replace(/_folder\.json$/i, ""), prefix), {
-        ...parsed,
-        path: stripPrefix(entry.key.replace(/_folder\.json$/i, ""), prefix),
-        etag: raw.etag || entry.etag,
-        renderVersion: FOLDER_RENDER_VERSION,
-      });
-    } catch {
-      // ignore broken meta
+    const name = note.category?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!groups.has(key)) {
+      const slug = slugifySegment(name) || "category";
+      groups.set(key, { name, slug, notes: [] });
     }
+    groups.get(key)!.notes.push({
+      title: note.title,
+      slug: note.slug,
+      isDraft: note.isDraft,
+      isHome: note.isHome,
+    });
   }
-  return folderMeta;
+  const sorted = [...groups.values()].sort((a, b) => {
+    return a.name.localeCompare(b.name, "ru");
+  });
+  sorted.forEach((cat) =>
+    cat.notes.sort((a, b) => {
+      if (a.isHome && !b.isHome) return -1;
+      if (b.isHome && !a.isHome) return 1;
+      return a.title.localeCompare(b.title, "ru");
+    }),
+  );
+  return sorted;
 }
 
-function buildSlugFromFolders(relativeKey: string, baseSlug: string, folderMeta: Map<string, FolderMeta>, hasFrontmatterSlug: boolean) {
-  const segments = relativeKey.split("/").filter(Boolean);
-  const folderSegments = segments.slice(0, -1);
-  const folderSlugs = resolveFolderSlugs(folderSegments, folderMeta);
-  const base = hasFrontmatterSlug ? slugifySegment(baseSlug) : baseSlug;
-  return slugFromPathSegments([...folderSlugs, base]);
-}
-
-function buildBreadcrumbs(relativeKey: string, folderMeta: Map<string, FolderMeta>, slug: string, title: string, prefix?: string) {
-  const segments = relativeKey.split("/").filter(Boolean);
-  const folders = segments.slice(0, -1);
-  const breadcrumbs: { title: string; href: string }[] = [];
-  for (let i = 0; i < folders.length; i++) {
-    const pathPart = folders.slice(0, i + 1);
-    const metaKey = pathPart.join("/");
-    const href = `/folders/${resolveFolderSlugs(pathPart, folderMeta).join("/")}`;
-    const label = folderMeta.get(metaKey)?.title || pathPart[pathPart.length - 1];
-    breadcrumbs.push({ title: label || "Папка", href });
+function buildBreadcrumbs(category: string | null, slug: string, title: string) {
+  const breadcrumbs: { title: string; href: string | null }[] = [];
+  if (category) {
+    const categorySlug = slugifySegment(category);
+    breadcrumbs.push({ title: category, href: categorySlug ? `/category/${categorySlug}` : null });
   }
   breadcrumbs.push({ title, href: `/${slug}` });
   return breadcrumbs;
@@ -258,15 +293,10 @@ function stripPrefix(key: string, customPrefix?: string) {
   return normalizedKey;
 }
 
-function unslugify(input: string) {
-  return input
-    .replace(/[-_]/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function isFolderIndex(key: string) {
-  return key.toLowerCase().endsWith("_folder.json");
+function safeDecode(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

@@ -3,6 +3,11 @@
   grid-template-columns: 320px 1fr;
   min-height: 100vh;
   background: var(--bg);
+  --mobile-header-height: 60px;
+}
+
+.noSidebar {
+  grid-template-columns: 1fr;
 }
 
 .content {
@@ -14,7 +19,8 @@
 }
 
 .noteWrapper {
-  width: min(1100px, 100%);
+  width: 100%;
+  max-width: 1000px;
   background: var(--card);
   padding: 24px 28px;
   border-radius: 0;
@@ -75,9 +81,13 @@
     min-height: auto;
   }
   .content {
-    padding: 12px 16px 24px 16px;
+    padding: calc(var(--mobile-header-height) + 20px) 20px 20px 20px;
   }
   .title {
     font-size: 1.6rem;
+  }
+
+  .noteWrapper {
+    padding: 0;
   }
 }

@@ -2,58 +2,45 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getSiteBySlug } from "@notepub/core";
-import { listObjects } from "@notepub/storage";
+import { getIndexData } from "@/lib/notes";
 
 export const dynamic = "force-dynamic";
 
-export default async function MapPage() {
+export default async function MapPage({ searchParams }: { searchParams?: { slug?: string } }) {
   const host = headers().get("host") || "";
-  const siteSlug = headers().get("x-site-slug") || extractSlugFromHost(host);
+  const siteSlug = searchParams?.slug || headers().get("x-site-slug") || extractSlugFromHost(host);
   if (!siteSlug) notFound();
 
   const site = await getSiteBySlug(siteSlug);
   if (!site) notFound();
 
-  const objects = await listObjects(site.s3Prefix);
-  const entries = objects
-    .filter((obj) => obj.key.toLowerCase().endsWith(".md"))
-    .map((obj) => ({
-      key: obj.key,
-      relative: stripPrefix(obj.key, site.s3Prefix),
+  const index = await getIndexData(site.s3Prefix, { includeDrafts: true });
+  const entries = index.flat
+    .map((note) => ({
+      slug: note.slug,
+      title: note.title,
+      category: note.category,
     }))
-    .sort((a, b) => a.relative.localeCompare(b.relative));
+    .sort((a, b) => a.slug.localeCompare(b.slug, "ru"));
 
   return (
     <main style={{ padding: "32px 20px", maxWidth: 960, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 12 }}>Site map</h1>
-      <p style={{ marginBottom: 16 }}>Listing markdown files under {site.s3Prefix}</p>
+      <p style={{ marginBottom: 16 }}>Listing published note slugs</p>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
-        {entries.map((entry) => {
-          const href = toSlugPath(entry.relative);
-          return (
-            <li key={entry.key}>
-              <Link href={`/${href}`} style={{ color: "#0c4a6e" }}>
-                {href}
-              </Link>
-            </li>
-          );
-        })}
+        {entries.map((entry) => (
+          <li key={entry.slug}>
+            <Link href={`/${entry.slug}`} style={{ color: "#0c4a6e" }}>
+              {entry.slug}
+            </Link>
+            <span style={{ color: "#475569", marginLeft: 8 }}>
+              {entry.category ? `(${entry.category})` : "(без категории)"} — {entry.title}
+            </span>
+          </li>
+        ))}
       </ul>
     </main>
   );
-}
-
-function stripPrefix(key: string, prefix: string) {
-  const normalizedPrefix = prefix.replace(/^\/+/, "").replace(/\/+$/, "");
-  const normalizedKey = key.replace(/^\/+/, "");
-  if (normalizedPrefix && normalizedKey.startsWith(normalizedPrefix + "/")) {
-    return normalizedKey.slice(normalizedPrefix.length + 1);
-  }
-  return normalizedKey;
-}
-
-function toSlugPath(relative: string) {
-  return relative.replace(/\.md$/i, "");
 }
 
 function extractSlugFromHost(host: string) {

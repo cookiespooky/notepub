@@ -1,0 +1,64 @@
+.menu {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(12, 74, 110, 0.08);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.email {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caret,
+.caretOpen {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--text);
+  transition: transform 0.15s ease;
+}
+
+.caretOpen {
+  transform: rotate(180deg);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  min-width: 220px;
+  display: grid;
+  padding: 10px;
+  gap: 4px;
+}
+
+.dropdown a {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.dropdown a:hover {
+  background: rgba(12, 74, 110, 0.06);
+}

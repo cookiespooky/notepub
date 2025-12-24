@@ -10,12 +10,16 @@ import { sendVerificationEmail } from "@/lib/emails";
 export async function signupAction(_: { error?: string } | undefined, formData: FormData) {
   const email = (formData.get("email") || "").toString().trim().toLowerCase();
   const password = (formData.get("password") || "").toString();
+  const passwordConfirm = (formData.get("passwordConfirm") || "").toString();
 
   if (!email || !password) {
     return { error: "Email и пароль обязательны" };
   }
   if (password.length < 6) {
     return { error: "Пароль должен быть не короче 6 символов" };
+  }
+  if (passwordConfirm && password !== passwordConfirm) {
+    return { error: "Пароли не совпадают" };
   }
   try {
     const user = await registerUser(email, password);

@@ -1,4 +1,5 @@
 import { prisma } from "@notepub/db";
+import type { Prisma } from "@prisma/client";
 import { putObjectString } from "@notepub/storage";
 
 export async function getSiteBySlug(slug: string) {
@@ -26,7 +27,7 @@ export async function createSite(input: { slug: string; title: string; ownerId: 
     },
   });
 
-  const s3Prefix = `sites/${base.id}/vault`;
+  const s3Prefix = `publishers/${input.ownerId}/vaults/${base.id}`;
   if (base.s3Prefix === s3Prefix) {
     return base;
   }
@@ -53,40 +54,24 @@ function normalizePrefix(prefix: string) {
 async function seedDefaultContent(rawPrefix: string) {
   const prefix = normalizePrefix(rawPrefix);
   const root = `${prefix}`;
-  const folderPath = `${prefix}ideas/`;
 
   const rootIndex = `---
-title: Welcome
+title: Добро пожаловать
 slug: welcome
+home: true
 ---
-# Welcome to your Notepub site
+# Добро пожаловать на ваш сайт на Notepub!
 
-This is the default homepage. Edit \`index.md\` in your vault to replace this text.
+Все готово для ваших идей.
 
-- Your site slug: auto-generated
-- Storage prefix: ${rawPrefix}
-- Next steps: sync your Obsidian vault via Remotely Save to this folder.
-`;
+## Быстрый старт на Notepub: https://about.notepub.site/manuals/quick-start
 
-  const folderMeta = {
-    title: "Ideas",
-    slug: "ideas",
-  };
-
-  const folderIndex = `---
-title: First idea
-slug: first-idea
----
-# First idea
-
-Write down something interesting here. You can add more notes to this folder.
+После того, как вы синхронизируете ваш Obsidian с Notepub, здесь появится ваш контент вместо этой страницы.
 `;
 
   await Promise.all([
     putObjectString(`${root}.keep`, "notepub init"),
-    putObjectString(`${root}index.md`, rootIndex, "text/markdown"),
-    putObjectString(`${folderPath}_folder.json`, JSON.stringify(folderMeta, null, 2), "application/json"),
-    putObjectString(`${folderPath}index.md`, folderIndex, "text/markdown"),
+    putObjectString(`${root}Welcome.md`, rootIndex, "text/markdown"),
   ]);
 }
 
@@ -97,19 +82,26 @@ export async function updateSite(input: {
   title: string;
   ogImageUrl?: string | null;
   ogDescription?: string | null;
+  hideSidebarOnHome?: boolean;
+  yandexMetrikaId?: string | null;
 }) {
   const site = await prisma.site.findUnique({ where: { id: input.id } });
   if (!site || site.ownerId !== input.ownerId) {
     throw new Error("Forbidden");
   }
+
+  const data: Prisma.SiteUpdateInput = {
+    slug: input.slug,
+    title: input.title,
+    ...(input.ogImageUrl !== undefined ? { ogImageUrl: input.ogImageUrl } : {}),
+    ...(input.ogDescription !== undefined ? { ogDescription: input.ogDescription } : {}),
+    ...(input.hideSidebarOnHome !== undefined ? { hideSidebarOnHome: input.hideSidebarOnHome } : {}),
+    ...(input.yandexMetrikaId !== undefined ? { yandexMetrikaId: input.yandexMetrikaId } : {}),
+  };
+
   return prisma.site.update({
     where: { id: input.id },
-    data: {
-      slug: input.slug,
-      title: input.title,
-      ogImageUrl: input.ogImageUrl,
-      ogDescription: input.ogDescription,
-    },
+    data,
   });
 }
 
@@ -118,5 +110,9 @@ export async function deleteSite(input: { id: string; ownerId: string }) {
   if (!site || site.ownerId !== input.ownerId) {
     throw new Error("Forbidden");
   }
+
+  // Manually cascade delete linked data to avoid FK restriction errors.
+  await prisma.formSubmission.deleteMany({ where: { siteId: input.id } });
+
   return prisma.site.delete({ where: { id: input.id } });
 }

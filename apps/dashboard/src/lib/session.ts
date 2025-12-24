@@ -8,6 +8,7 @@ const env = loadEnv();
 const COOKIE_NAME = env.SESSION_COOKIE_NAME;
 const SECRET = env.COOKIE_SECRET;
 const IS_PROD = env.NODE_ENV === "production";
+const COOKIE_DOMAIN = env.COOKIE_DOMAIN;
 
 type CurrentUser = User & { emailVerified: boolean };
 
@@ -63,6 +64,7 @@ export function setSession(userId: string, emailVerified = false) {
     sameSite: "lax",
     secure: IS_PROD,
     path: "/",
+    domain: COOKIE_DOMAIN,
     maxAge: maxAgeDays * 24 * 60 * 60,
   });
 }
@@ -75,6 +77,7 @@ export function clearSession() {
     sameSite: "lax",
     secure: IS_PROD,
     path: "/",
+    domain: COOKIE_DOMAIN,
     maxAge: 0,
   });
 }
@@ -93,6 +96,7 @@ export function setSessionVerified(emailVerified: boolean) {
     sameSite: "lax",
     secure: IS_PROD,
     path: "/",
+    domain: COOKIE_DOMAIN,
     maxAge: maxAgeDays * 24 * 60 * 60,
   });
 }

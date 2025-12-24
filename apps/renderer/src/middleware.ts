@@ -8,11 +8,15 @@ export function middleware(req: NextRequest) {
   if (subdomain) {
     requestHeaders.set("x-site-slug", subdomain);
   }
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
+
+  response.headers.set("Cache-Control", "public, max-age=0, s-maxage=600, stale-while-revalidate=604800");
+
+  return response;
 }
 
 function extractSubdomain(host: string) {

@@ -1,21 +1,32 @@
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/session";
 import styles from "./page.module.css";
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+  const ctaHref = user ? "/dashboard/sites" : "/login";
+  const ctaLabel = user ? "Открыть кабинет" : "Войти";
+
   return (
     <main className={styles.hero}>
       <div className={styles.content}>
         <p className={styles.label}>Notepub</p>
-        <h1 className={styles.title}>Сделай сайт из Obsidian за 5 минут</h1>
-        <p className={styles.sub}>
-          Загрузи vault в S3, укажи slug — получи slug.notepub.site с готовым рендером.
-        </p>
+        <h1 className={styles.title}>Сайт из заметок</h1>
+        <div className={styles.sub}>
+          Бесплатно до 1000 страниц (примерно)
+        </div>
+        <div className={styles.sub}>
+          Настройка за пару минут и простое управление контентом
+        </div>
+        <div className={styles.sub}>
+          SEO и Opengraph уже настроены
+        </div>
         <div className={styles.actions}>
-          <Link className={styles.primary} href="/signup">
-            Start for free
+          <Link className={styles.secondary} href="https://about.notepub.site" target="_blank" rel="noreferrer">
+            Подробнее
           </Link>
-          <Link className={styles.secondary} href="/dashboard">
-            Open dashboard
+          <Link className={styles.primary} href={ctaHref}>
+            {ctaLabel}
           </Link>
         </div>
       </div>

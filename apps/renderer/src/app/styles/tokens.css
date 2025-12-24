@@ -1,0 +1,82 @@
+:root {
+  /* Core palette */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #fafafa;
+  --color-surface-subtle: #e7eef4;
+  --color-surface-alt: #f8fafc;
+  --color-border: #e0e0e0;
+  --color-text: #333;
+  --color-text-strong: #1f2933;
+  --color-heading: #333;
+  --color-muted: #4a5560;
+  --color-accent: #0c4a6e;
+  --color-accent-strong: #093a57;
+  --color-accent-stronger: #062a40;
+  --color-shadow: rgba(0, 0, 0, 0.08);
+
+  /* Content and component accents */
+  --color-code-surface: #f2f4f8;
+  --color-code-border: #e0e0e0;
+  --color-blockquote-border: #9ca3af;
+  --color-blockquote-bg: #f8fafc;
+  --color-table-stripe: #f7f9fc;
+  --color-callout-note-bg: #eef2fb;
+  --color-callout-note-border: rgba(59, 99, 209, 0.35);
+  --color-callout-warning-bg: #fff6e5;
+  --color-callout-warning-border: rgba(255, 196, 86, 0.4);
+  --color-callout-info-bg: #f1ecff;
+  --color-callout-info-border: rgba(127, 90, 240, 0.4);
+  --color-warning-bg: #fef3c7;
+  --color-warning-border: #f59e0b;
+  --color-warning-text: #92400e;
+
+  /* Typography */
+  --font-body: "Inter", "Helvetica Neue", Arial, system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-body);
+  --line-body: 1.7;
+  --line-heading: 1.35;
+  --weight-body: 400;
+  --weight-heading: 800;
+
+  /* Radii and shadows */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --shadow-soft: 0 20px 60px var(--color-shadow);
+
+  /* Spacing scale */
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-18: 18px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-28: 28px;
+  --space-32: 32px;
+  --space-42: 42px;
+  --space-48: 48px;
+  --space-80: 80px;
+
+  /* Layout helpers */
+  --mobile-header-height: 60px;
+  --content-max-width: 800px;
+
+  /* Legacy aliases for existing CSS 
+  --bg: var(--color-bg);
+  --sidebar: var(--color-surface-muted);
+  --card: var(--color-surface);
+  --text: var(--color-text);
+  --muted: var(--color-muted);
+  --accent: var(--color-accent);
+  --accent-2: var(--color-accent-strong);
+  --border: var(--color-border);
+  --muted-surface: var(--color-surface-subtle);
+  --shadow: var(--color-shadow);
+  --radius: var(--radius-lg);
+  --font: var(--font-body);*/
+}

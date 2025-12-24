@@ -88,3 +88,35 @@
   color: #16a34a;
   font-size: 14px;
 }
+
+.passwordRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: #0c4a6e;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.emailPill {
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  font-weight: 600;
+  color: #0f172a;
+}

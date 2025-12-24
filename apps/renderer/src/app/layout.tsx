@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { getAppUrl } from "../lib/domains";
+import { NavProvider } from "@/components/NavContext";
+import { SidebarDataProvider } from "@/components/SidebarDataContext";
 
+const appUrl = getAppUrl();
 export const metadata: Metadata = {
-  title: "Obsidian Vault",
-  description: "Live Obsidian vault rendered from Timeweb S3",
-  metadataBase: new URL("https://notepub.site"),
+  title: { default: "Notepub", template: "%s | Notepub" },
+  description: "Live site rendered with Notepub",
+  metadataBase: new URL(appUrl),
 };
 
 export default function RootLayout({
@@ -14,7 +18,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <SidebarDataProvider>
+          <NavProvider>{children}</NavProvider>
+        </SidebarDataProvider>
+      </body>
     </html>
   );
 }

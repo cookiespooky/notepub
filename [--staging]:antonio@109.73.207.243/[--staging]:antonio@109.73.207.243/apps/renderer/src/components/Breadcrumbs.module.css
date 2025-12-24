@@ -1,0 +1,33 @@
+.trail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  flex-wrap: wrap;
+}
+
+.trail span {
+  white-space: wrap;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  margin-right: 8px;
+}
+
+.link:hover {
+  color: #093a57;
+}
+
+.link:active {
+  color: #062a40;
+}
+
+.current {
+  color: var(--text);
+  font-weight: 600;
+}

@@ -1,35 +1,38 @@
 :root {
-  --bg: #ffffff;
-  --card: #ffffff;
-  --text: #222222;
-  --muted: #4a5560;
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --muted-surface: #e7eef4;
+  --text: #0f172a;
+  --muted: #5b6472;
   --accent: #0c4a6e;
-  --border: #e0e0e0;
-  --radius: 12px;
+  --accent-soft: #d5e6f1;
+  --radius: 14px;
   --font: "Inter", "Helvetica Neue", Arial, system-ui, -apple-system, sans-serif;
+  --shadow: 0 18px 40px rgba(12, 74, 110, 0.08);
 }
 
 * {
   box-sizing: border-box;
+  word-break: break-word;
 }
 
 body {
   margin: 0;
   font-family: var(--font);
-  background: var(--bg);
   color: var(--text);
+  min-height: 100vh;
 }
 
 a {
   color: var(--accent);
   text-decoration: none;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 a:hover {
-  color: #093a57;
+  opacity: 0.9;
 }
 
 a:active {
-  color: #062a40;
+  opacity: 0.8;
 }

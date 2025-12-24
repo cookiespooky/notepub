@@ -1,0 +1,90 @@
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+  background: #ffffff;
+  color: #222222;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  padding: 24px;
+  background: #f6f6f6;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.title {
+  margin: 0 0 16px 0;
+  font-size: 24px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: #222222;
+}
+
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #222222;
+}
+
+.primary {
+  margin-top: 8px;
+  padding: 12px;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  background: #0c4a6e;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary {
+  margin-top: 8px;
+  padding: 12px;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0c4a6e;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.meta {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #4a5560;
+}
+
+.meta a {
+  color: #0c4a6e;
+}
+
+.error {
+  margin: 4px 0 0 0;
+  color: #f87171;
+  font-size: 14px;
+}
+
+.success {
+  margin: 4px 0 0 0;
+  color: #16a34a;
+  font-size: 14px;
+}

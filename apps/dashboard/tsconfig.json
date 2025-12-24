@@ -12,7 +12,8 @@
         "./src/*"
       ]
     },
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "types": ["@types/node", "@types/react", "@types/react-dom"]
   },
   "include": [
     "next-env.d.ts",

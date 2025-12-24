@@ -36,9 +36,11 @@ export function VerifyEmailForm({ email }: { email: string }) {
         type="button"
         className={styles.secondary}
         onClick={() =>
-          startTransition(async () => {
-            const res = await resendVerificationAction();
-            setResendMessage(res.success || res.error || "");
+          startTransition(() => {
+            void (async () => {
+              const res = await resendVerificationAction();
+              setResendMessage(res.success || res.error || "");
+            })();
           })
         }
         disabled={pending}
