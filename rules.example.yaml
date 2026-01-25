@@ -1,0 +1,255 @@
+version: 1
+
+# ------------------------------------------------------------
+# 0) Field contract: всё берётся из frontmatter (fm) напрямую
+# ------------------------------------------------------------
+fields:
+  required: ["type", "slug", "title"]
+  optional: ["description", "draft"]
+  defaults:
+    draft: false
+
+# Optional: типизация fm.* для where/sort/group_by стабильности.
+# Если поле не указано — трактуем как string.
+fm_schema:
+  price: number
+  weight: number
+  tags: string[]
+  hub: string[]
+  related: string[]
+  draft: boolean
+
+# ------------------------------------------------------------
+# 1) Types: type = fm.type, ничего не вычисляем
+# Home определяется через permalink: "/"
+# ------------------------------------------------------------
+types:
+  home:
+    template: "home.html"
+    permalink: "/"
+    include_in:
+      sitemap: true
+      search: false
+
+  page:
+    template: "page.html"
+    permalink: "/{{ slug }}/"
+    include_in:
+      sitemap: true
+      search: true
+
+  article:
+    template: "article.html"
+    permalink: "/{{ slug }}/"
+    include_in:
+      sitemap: true
+      search: true
+
+  hub:
+    template: "hub.html"
+    permalink: "/{{ slug }}/"
+    include_in:
+      sitemap: true
+      search: false
+
+  good:
+    template: "good.html"
+    permalink: "/shop/{{ slug }}/"
+    include_in:
+      sitemap: true
+      search: true
+
+# ------------------------------------------------------------
+# 2) Links: универсальные правила построения edges
+# ------------------------------------------------------------
+links:
+  - name: "belongs_to"
+    kind: "field"
+    field: "hub"
+    from_types: ["article", "good", "page"]
+    to_types: ["hub"]
+    to: "slug"
+    inverse: "contains"
+    value_syntax: "auto"
+    resolve:
+      order: ["path", "filename", "slug"]
+      ambiguity: "error"
+      missing: "warn_skip"
+      case: "insensitive"
+
+  - name: "related"
+    kind: "field"
+    field: "related"
+    from_types: ["article", "page", "good"]
+    to_types: ["article", "page", "good"]
+    to: "slug"
+    value_syntax: "auto"
+    resolve:
+      order: ["path", "filename", "slug"]
+      ambiguity: "error"
+      missing: "warn_skip"
+      case: "insensitive"
+
+  - name: "wiki"
+    kind: "wikilinks"
+    from_types: ["page", "article", "hub", "good"]
+    resolve_by: "wikimap"
+    to_types: ["page", "article", "hub", "good"]
+    resolve:
+      order: ["path", "filename", "slug"]
+      ambiguity: "error"
+      missing: "warn_skip"
+      case: "insensitive"
+
+# ------------------------------------------------------------
+# 3) Collections: declarative query layer
+# ------------------------------------------------------------
+collections:
+  home_hubs:
+    kind: "filter"
+    materialize: false
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["hub"]
+    sort:
+      by: "title"
+      dir: "asc"
+      nulls_last: true
+    limit: 100
+
+  hub_items:
+    kind: "backrefs"
+    materialize: false
+    link: "belongs_to"
+    to_slug: "{{ page.slug }}"
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["article", "good", "page"]
+    sort:
+      by: "updated_at"
+      dir: "desc"
+      nulls_last: true
+    limit: 50
+
+  related_pages:
+    kind: "forward"
+    materialize: false
+    link: "related"
+    from_slug: "{{ page.slug }}"
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+    sort:
+      by: "title"
+      dir: "asc"
+      nulls_last: true
+    limit: 12
+
+  wiki_neighbors:
+    kind: "forward"
+    materialize: false
+    link: "wiki"
+    from_slug: "{{ page.slug }}"
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+    limit: 30
+
+  shop_goods:
+    kind: "filter"
+    materialize: true
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["good"]
+    sort:
+      by: "fm.price"
+      dir: "asc"
+      nulls_last: true
+    limit: 500
+
+  articles_by_tag:
+    kind: "filter"
+    materialize: false
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["article"]
+    limit: 5000
+    group_by:
+      by: "fm.tags"
+      multi: true
+      group_sort:
+        dir: "asc"
+      item_sort:
+        by: "updated_at"
+        dir: "desc"
+      item_limit: 30
+
+  hub_items_grouped:
+    kind: "backrefs"
+    materialize: false
+    link: "belongs_to"
+    to_slug: "{{ page.slug }}"
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+    limit: 2000
+    group_by:
+      by: "type"
+      multi: false
+      group_sort:
+        dir: "asc"
+      item_sort:
+        by: "updated_at"
+        dir: "desc"
+      item_limit: 50
+
+# ------------------------------------------------------------
+# 4) Search / Sitemap
+# ------------------------------------------------------------
+sitemap:
+  include_types: ["home", "page", "article", "hub", "good"]
+  exclude_drafts: true
+
+search:
+  include_types: ["page", "article", "good"]
+  exclude_drafts: true
+  fields_boost:
+    title: 3
+    description: 2
+    body: 1
+    fm:
+      tags: 1
+  preview:
+    from: "description"
+    max_len: 180
+
+# ------------------------------------------------------------
+# 5) Artifacts: материализация коллекций
+# ------------------------------------------------------------
+artifacts:
+  collections:
+    enabled: true
+    dir: "collections"
+
+# ------------------------------------------------------------
+# 6) Validation
+# ------------------------------------------------------------
+validation:
+  single_page_of_type:
+    home: 1
+  duplicate_route:
+    action: "error"
+  unknown_type:
+    action: "error"
+  unique_slug:
+    action: "error"
+  permalink_requires_slug:
+    action: "error"
+  missing_template:
+    action: "error"
+  materialize_requires_limit: true
+  materialize_group_by_requires_item_limit: true

@@ -1,6 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# ==========================
+# Dependencies (JS part)
+# ==========================
 /node_modules
 **/node_modules
 /.pnp
@@ -11,42 +11,50 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# ==========================
+# Testing
+# ==========================
 /coverage
 **/coverage
 
-# next.js
-/.next/
-**/.next/
-/out/
-**/out/
-
-# production
+# ==========================
+# Build artifacts
+# ==========================
 /build
 **/build
 
-# misc
-.DS_Store
-.eslintcache
-*.pem
+# Go binaries
+/bin/
+notepub
+notepub.exe
+*.exe
+*.so
+*.dylib
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-**/.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# cache
+# ==========================
+# Notepub runtime data
+# ==========================
+artifacts/
 cache/
-**/.turbo/
+data/
+storage/
+uploads/
+var/
+
+# ==========================
+# Local config / env
+# ==========================
+config.yaml
+rules.yaml
+.env
+.env.*
+.direnv/
+.envrc
+
+# ==========================
+# OS / editor noise
+# ==========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

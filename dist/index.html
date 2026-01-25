@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="http://127.0.0.1:8080/">
+  <link rel="stylesheet" href="/assets/home.css">
+  <title>Notepub — блог без CMS</title>
+</head>
+<body>
+  <div class="np-shell">
+    <header class="np-header">
+      <a class="np-brand" href="/">
+        <span class="np-brand-mark">NP</span>
+        <span class="np-brand-text">Notepub</span>
+      </a>
+      <nav class="np-nav">
+        <a href="/search" class="np-nav-link">Search</a>
+        
+<div class="np-search">
+  <a id="np-search-trigger" class="np-search-trigger" href="/search" aria-haspopup="dialog" aria-controls="np-search-dialog">🔍</a>
+</div>
+<dialog id="np-search-dialog" class="np-search-dialog" aria-label="Search" role="dialog">
+  <form class="np-search-form" method="get" action="/search">
+    <input type="search" name="q" placeholder="Search" autocomplete="off" />
+    <button type="submit">Search</button>
+    <button type="button" class="np-search-close" data-action="close" aria-label="Close">×</button>
+  </form>
+  <div class="np-search-status" aria-live="polite"></div>
+  <div class="np-search-results" role="listbox"></div>
+  <a class="np-search-all" href="/search">Все результаты</a>
+</dialog>
+<div class="np-search-backdrop" data-action="close" hidden></div>
+<script>
+(function() {
+  if (window.__notepubSearchLoader) return;
+  window.__notepubSearchLoader = true;
+  var trigger = document.getElementById('np-search-trigger');
+  if (!trigger) return;
+  var loading = false;
+  trigger.addEventListener('click', function(e) {
+    if (loading) return;
+    if (window.NotepubSearchModal && window.NotepubSearchModal.open) {
+      e.preventDefault();
+      window.NotepubSearchModal.open();
+      return;
+    }
+    e.preventDefault();
+    loading = true;
+    var s = document.createElement('script');
+    s.src = '/assets/search-modal.js';
+    s.async = true;
+    s.onload = function() {
+      loading = false;
+      if (window.NotepubSearchModal && window.NotepubSearchModal.init) {
+        window.NotepubSearchModal.init({
+          mount: document.getElementById('np-search-dialog'),
+          endpoint: '/v1/search'
+        });
+        window.NotepubSearchModal.open();
+      } else {
+        window.location.href = trigger.href;
+      }
+    };
+    s.onerror = function() {
+      loading = false;
+      window.location.href = trigger.href;
+    };
+    document.head.appendChild(s);
+  });
+})();
+</script>
+
+      </nav>
+    </header>
+    <main class="np-content">
+      <section class="np-hero">
+  <div class="np-hero-copy">
+    <h1>Notepub для продуктовых и SEO-команд</h1>
+<p>Публикуйте контент напрямую из Obsidian и получайте стабильный HTML без сложной инфраструктуры.</p>
+<ul>
+<li>Быстрая индексация и чистые sitemap</li>
+<li>Контент в S3, рендеринг в Go</li>
+<li>Гибкие правила для типов, коллекций и связей</li>
+</ul>
+<p>Хотите посмотреть, как устроены разделы? Ниже — хабы и подборки статей.</p>
+
+  </div>
+  <div class="np-hero-card">
+    <p class="np-hero-eyebrow">Notepub Blog</p>
+    <h2>Сайт, который держит SEO в форме</h2>
+    <p>Минимальная инфраструктура, максимум скорости. Публикуйте из Obsidian и не думайте о CMS.</p>
+    <a class="np-cta" href="/search">Перейти к поиску</a>
+  </div>
+</section>
+
+<section class="np-section">
+  <div class="np-section-head">
+    <h2>Разделы</h2>
+    <p>Хабы с подборками статей и практических гайдов.</p>
+  </div>
+  <div class="np-grid">
+    <article class="np-card">
+      <a class="np-card-media" href="/ai-indexing">
+        <img src="http://127.0.0.1:8080/media/assets/hub-ai.svg" alt="AI-индексация">
+      </a>
+      <div class="np-card-body">
+        <h3><a href="/ai-indexing">AI-индексация</a></h3>
+        <p>Как AI меняет поисковую индексацию и что делать с контентом прямо сейчас.</p>
+      </div>
+    </article>
+    <article class="np-card">
+      <a class="np-card-media" href="/content-ops">
+        <img src="http://127.0.0.1:8080/media/assets/hub-content.svg" alt="Контент-операции">
+      </a>
+      <div class="np-card-body">
+        <h3><a href="/content-ops">Контент-операции</a></h3>
+        <p>Процессы, шаблоны и контроль качества для масштабного контента.</p>
+      </div>
+    </article>
+    <article class="np-card">
+      <a class="np-card-media" href="/infra-for-seo">
+        <img src="http://127.0.0.1:8080/media/assets/hub-infra.svg" alt="Техинфраструктура">
+      </a>
+      <div class="np-card-body">
+        <h3><a href="/infra-for-seo">Техинфраструктура</a></h3>
+        <p>Инфраструктура для быстрых, предсказуемых и устойчивых SEO-проектов.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+    </main>
+    <footer class="np-footer">
+      <span>Published with Notepub</span>
+    </footer>
+  </div>
+</body>
+</html>

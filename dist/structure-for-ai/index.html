@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="http://127.0.0.1:8080/structure-for-ai">
+  <meta property="og:image" content="http://127.0.0.1:8080/media/assets/article-structure.svg">
+  <title>Структура контента для AI-поиска</title>
+</head>
+<body>
+  <div class="np-shell">
+    <header class="np-header">
+      <a class="np-brand" href="/">
+        <span class="np-brand-mark">NP</span>
+        <span class="np-brand-text">Notepub</span>
+      </a>
+      <nav class="np-nav">
+        <a href="/search" class="np-nav-link">Search</a>
+        
+<div class="np-search">
+  <a id="np-search-trigger" class="np-search-trigger" href="/search" aria-haspopup="dialog" aria-controls="np-search-dialog">🔍</a>
+</div>
+<dialog id="np-search-dialog" class="np-search-dialog" aria-label="Search" role="dialog">
+  <form class="np-search-form" method="get" action="/search">
+    <input type="search" name="q" placeholder="Search" autocomplete="off" />
+    <button type="submit">Search</button>
+    <button type="button" class="np-search-close" data-action="close" aria-label="Close">×</button>
+  </form>
+  <div class="np-search-status" aria-live="polite"></div>
+  <div class="np-search-results" role="listbox"></div>
+  <a class="np-search-all" href="/search">Все результаты</a>
+</dialog>
+<div class="np-search-backdrop" data-action="close" hidden></div>
+<script>
+(function() {
+  if (window.__notepubSearchLoader) return;
+  window.__notepubSearchLoader = true;
+  var trigger = document.getElementById('np-search-trigger');
+  if (!trigger) return;
+  var loading = false;
+  trigger.addEventListener('click', function(e) {
+    if (loading) return;
+    if (window.NotepubSearchModal && window.NotepubSearchModal.open) {
+      e.preventDefault();
+      window.NotepubSearchModal.open();
+      return;
+    }
+    e.preventDefault();
+    loading = true;
+    var s = document.createElement('script');
+    s.src = '/assets/search-modal.js';
+    s.async = true;
+    s.onload = function() {
+      loading = false;
+      if (window.NotepubSearchModal && window.NotepubSearchModal.init) {
+        window.NotepubSearchModal.init({
+          mount: document.getElementById('np-search-dialog'),
+          endpoint: '/v1/search'
+        });
+        window.NotepubSearchModal.open();
+      } else {
+        window.location.href = trigger.href;
+      }
+    };
+    s.onerror = function() {
+      loading = false;
+      window.location.href = trigger.href;
+    };
+    document.head.appendChild(s);
+  });
+})();
+</script>
+
+      </nav>
+    </header>
+    <main class="np-content">
+      <article class="np-article">
+  <p><img src="/media/assets/article-structure.svg" alt=""></p>
+<h1>Структура контента для AI-поиска</h1>
+<p>AI-ранкеры лучше понимают контент, если он структурирован: заголовки, списки, явные сущности и короткие абзацы.</p>
+
+</article>
+<section class="np-related">
+  <h2>Связанные статьи</h2>
+  <div class="np-grid">
+    <article class="np-card">
+      <a class="np-card-media" href="/faster-indexing">
+        <img src="http://127.0.0.1:8080/media/assets/article-speed.svg" alt="Как ускорить индексацию без боли">
+      </a>
+      <div class="np-card-body">
+        <h3><a href="/faster-indexing">Как ускорить индексацию без боли</a></h3>
+        <p>Практический чек-лист: sitemap, частота обновлений и метрики, которые влияют на скорость обхода.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+    </main>
+    <footer class="np-footer">
+      <span>Published with Notepub</span>
+    </footer>
+  </div>
+</body>
+</html>

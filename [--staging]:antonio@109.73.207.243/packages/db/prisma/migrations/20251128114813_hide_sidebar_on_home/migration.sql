@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "hideSidebarOnHome" BOOLEAN NOT NULL DEFAULT false;
