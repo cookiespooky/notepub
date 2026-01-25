@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/cookiespooky/notepub/internal/models"
+	"github.com/cookiespooky/notepub/internal/urlutil"
 )
 
 //go:embed embed/templates/*.html
@@ -32,6 +33,8 @@ type Theme struct {
 type PageData struct {
 	Title            string
 	Canonical        string
+	BaseURL          string
+	AssetsBase       string
 	Meta             MetaData
 	Body             template.HTML
 	Template         string
@@ -199,10 +202,14 @@ func (t *Theme) RenderError(err error, data PageData) (string, error) {
 	return fmt.Sprintf("render error: %s", err.Error()), nil
 }
 
-func (t *Theme) RenderNotFound() (string, error) {
+func (t *Theme) RenderNotFound(baseURL string) (string, error) {
 	if t.layout != nil && templateExists(t.layout, "notfound.html") {
 		var buf bytes.Buffer
-		if err := t.layout.ExecuteTemplate(&buf, "notfound.html", nil); err == nil {
+		data := PageData{
+			BaseURL:    baseURL,
+			AssetsBase: urlutil.JoinBaseURL(baseURL, "/assets"),
+		}
+		if err := t.layout.ExecuteTemplate(&buf, "notfound.html", data); err == nil {
 			return buf.String(), nil
 		}
 	}

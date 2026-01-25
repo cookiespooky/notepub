@@ -261,7 +261,7 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 		Canonical: buildSearchCanonical(s.cfg.Site.BaseURL, q, cursor),
 		Robots:    "noindex, follow",
 	}
-	data := buildPageData(meta, "")
+	data := buildPageData(meta, "", s.cfg.Site.BaseURL)
 	data.IsSearch = true
 	data.SearchMode = "server"
 	data.SearchQuery = q
@@ -387,7 +387,7 @@ func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[str
 func (s *Server) writePage(w http.ResponseWriter, pathVal string, idx models.ResolveIndex, route models.RouteEntry, body string, cacheStatus string, stale bool) {
 	s.writePageHeaders(w, route, cacheStatus, stale)
 	meta := idx.Meta[pathVal]
-	data := buildPageData(meta, body)
+	data := buildPageData(meta, body, s.cfg.Site.BaseURL)
 	data.Template = s.templateForType(meta.Type)
 	data.Page.NoIndex = route.NoIndex
 	data.SearchMode = "server"
@@ -409,12 +409,14 @@ func (s *Server) writePage(w http.ResponseWriter, pathVal string, idx models.Res
 	w.Write([]byte(rendered))
 }
 
-func buildPageData(meta models.MetaEntry, body string) PageData {
+func buildPageData(meta models.MetaEntry, body, baseURL string) PageData {
 	data := PageData{
-		Title:     meta.Title,
-		Canonical: meta.Canonical,
-		Meta:      MetaData{Robots: meta.Robots},
-		Body:      template.HTML(body),
+		Title:      meta.Title,
+		Canonical:  meta.Canonical,
+		BaseURL:    baseURL,
+		AssetsBase: urlutil.JoinBaseURL(baseURL, "/assets"),
+		Meta:       MetaData{Robots: meta.Robots},
+		Body:       template.HTML(body),
 		Page: PageInfo{
 			Type:        meta.Type,
 			Slug:        meta.Slug,
@@ -477,7 +479,7 @@ func (s *Server) writePageHeaders(w http.ResponseWriter, route models.RouteEntry
 }
 
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
-	html, _ := s.theme.RenderNotFound()
+	html, _ := s.theme.RenderNotFound(s.cfg.Site.BaseURL)
 	w.WriteHeader(http.StatusNotFound)
 	w.Write([]byte(html))
 }

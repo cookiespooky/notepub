@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="icon" href="{{ .BaseURL }}/favicon.ico">
+  <link rel="stylesheet" href="{{ .AssetsBase }}/styles.css">
   {{- if .Meta.Robots }}
   <meta name="robots" content="{{ .Meta.Robots }}">
   {{- end }}
@@ -18,14 +18,14 @@
   <script type="application/ld+json">{{ .Meta.JSONLD }}</script>
   {{- end }}
   {{- if and .IsHome .HasHomeCSS }}
-  <link rel="stylesheet" href="/assets/home.css">
+  <link rel="stylesheet" href="{{ .AssetsBase }}/home.css">
   {{- end }}
   <title>{{ .Title }}</title>
 </head>
 <body>
   <div class="np-shell">
     <header class="np-header">
-      <a class="np-brand" href="/">notepub</a>
+      <a class="np-brand" href="{{ .BaseURL }}/">notepub</a>
       {{ template "search_trigger.html" . }}
     </header>
     <main class="np-content">

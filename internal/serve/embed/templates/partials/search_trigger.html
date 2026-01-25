@@ -1,6 +1,6 @@
 {{ define "search_trigger.html" }}
 <div class="np-search">
-  <a id="np-search-trigger" class="np-search-trigger" href="/search" aria-haspopup="dialog" aria-controls="np-search-dialog">🔍</a>
+  <a id="np-search-trigger" class="np-search-trigger" href="{{ .BaseURL }}/search" aria-haspopup="dialog" aria-controls="np-search-dialog">🔍</a>
 </div>
 <dialog id="np-search-dialog" class="np-search-dialog" aria-label="Search" role="dialog">
   <form class="np-search-form" method="get" action="/search">
@@ -10,7 +10,7 @@
   </form>
   <div class="np-search-status" aria-live="polite"></div>
   <div class="np-search-results" role="listbox"></div>
-  <a class="np-search-all" href="/search">Все результаты</a>
+  <a class="np-search-all" href="{{ .BaseURL }}/search">Все результаты</a>
 </dialog>
 <div class="np-search-backdrop" data-action="close" hidden></div>
 <script>
@@ -30,7 +30,7 @@
     e.preventDefault();
     loading = true;
     var s = document.createElement('script');
-    s.src = '/assets/search-modal.js';
+    s.src = '{{ .AssetsBase }}/search-modal.js';
     s.async = true;
     s.onload = function() {
       loading = false;

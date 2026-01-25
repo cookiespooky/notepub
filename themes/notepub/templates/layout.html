@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <link rel="stylesheet" href="/assets/styles.css" />
+  <link rel="stylesheet" href="{{ .AssetsBase }}/styles.css" />
   {{- if .Page.Description }}
   <meta name="description" content="{{ .Page.Description }}" />
   {{- end }}
@@ -27,7 +27,7 @@
 <body>
   <header>
     <div class="header-inner">
-      <a class="brand" href="/" aria-label="Notepub">
+      <a class="brand" href="{{ .BaseURL }}/" aria-label="Notepub">
         <span class="logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none">
             <path d="M7 17V7h2.2l5.6 7.2V7H17v10h-2.2L9.2 9.8V17H7z" fill="#0a0a0a"/>
@@ -38,15 +38,15 @@
 
       <div class="header-actions">
         <nav aria-label="Навигация">
-          <a href="/intro">Введение</a>
-          <a href="/getting-started">Старт</a>
-          <a href="/concepts">Концепции</a>
-          <a href="/themes">Темы</a>
-          <a href="/search">Поиск</a>
-          <a href="/seo">SEO</a>
-          <a href="/content-management">Контент</a>
-          <a href="/deploy">Деплой</a>
-          <a href="/integrations">Интеграции</a>
+          <a href="{{ .BaseURL }}/intro">Введение</a>
+          <a href="{{ .BaseURL }}/getting-started">Старт</a>
+          <a href="{{ .BaseURL }}/concepts">Концепции</a>
+          <a href="{{ .BaseURL }}/themes">Темы</a>
+          <a href="{{ .BaseURL }}/search">Поиск</a>
+          <a href="{{ .BaseURL }}/seo">SEO</a>
+          <a href="{{ .BaseURL }}/content-management">Контент</a>
+          <a href="{{ .BaseURL }}/deploy">Деплой</a>
+          <a href="{{ .BaseURL }}/integrations">Интеграции</a>
         </nav>
         <button class="nav-toggle" type="button" aria-label="Открыть навигацию" aria-controls="sidebar-tree" aria-expanded="false">
           ☰
@@ -66,7 +66,7 @@
         <div class="sidebar-section">
           <div class="sidebar-title">Документация</div>
           <ul class="sidebar-list">
-            <li><a href="/docs">Общий обзор</a></li>
+            <li><a href="{{ .BaseURL }}/docs">Общий обзор</a></li>
             {{- $groups := .Collections.docs_items_grouped.Groups }}
             {{- if .Collections.docs_hubs.Items }}
               {{- range .Collections.docs_hubs.Items }}

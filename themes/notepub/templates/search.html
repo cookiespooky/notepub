@@ -21,7 +21,7 @@
   <p class="np-search-empty">Нет результатов.</p>
   {{- end }}
   {{- if .SearchNextCursor }}
-  <a class="np-search-more" href="/search?q={{ .SearchQuery }}&cursor={{ .SearchNextCursor }}">Следующая страница</a>
+  <a class="np-search-more" href="{{ .BaseURL }}/search?q={{ .SearchQuery }}&cursor={{ .SearchNextCursor }}">Следующая страница</a>
   {{- end }}
 </section>
 <script>
@@ -35,7 +35,7 @@
     if (loaded) return;
     loaded = true;
     var s = document.createElement('script');
-    s.src = '/assets/search-page.js';
+    s.src = '{{ .AssetsBase }}/search-page.js';
     s.async = true;
     s.onload = function() {
       if (window.NotepubSearchPage && window.NotepubSearchPage.init) {

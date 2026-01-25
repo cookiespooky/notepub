@@ -141,7 +141,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		}
 
 		meta = normalizeMetaMediaURLs(meta, cfg.Site.MediaBaseURL)
-		data := buildPageData(meta, rendered)
+		data := buildPageData(meta, rendered, cfg.Site.BaseURL)
 		data.Template = templateForType(meta.Type, rulesCfg)
 		data.Page.NoIndex = route.NoIndex
 		data.SearchMode = "static"
@@ -158,7 +158,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		}
 	}
 
-	notFound, err := theme.RenderNotFound()
+	notFound, err := theme.RenderNotFound(cfg.Site.BaseURL)
 	if err != nil {
 		notFound = "Not Found"
 	}
