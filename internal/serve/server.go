@@ -22,6 +22,7 @@ import (
 	"github.com/yuin/goldmark"
 
 	"github.com/cookiespooky/notepub/internal/config"
+	"github.com/cookiespooky/notepub/internal/localutil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
@@ -153,6 +154,20 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
+	if s.cfg.Content.Source == "local" {
+		if prefix := s.cfg.S3.Prefix; prefix != "" && !strings.HasPrefix(key, prefix) {
+			key = path.Join(prefix, key)
+		}
+		localPath, err := localutil.ResolvePath(s.cfg.Content.LocalDir, key)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		serveFile(w, r, localPath, "")
+		return
+	}
+
 	if prefix := s.cfg.S3.Prefix; prefix != "" && !strings.HasPrefix(key, prefix) {
 		key = path.Join(prefix, key)
 	}
@@ -316,7 +331,14 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var markdown string
-	if s.cfg.S3.Anonymous {
+	if s.cfg.Content.Source == "local" {
+		body, err := localutil.FetchObject(s.cfg.Content.LocalDir, route.S3Key)
+		if err != nil {
+			s.serveStaleOr503(w, r, pathVal)
+			return
+		}
+		markdown = string(body)
+	} else if s.cfg.S3.Anonymous {
 		fetchCtx, cancelFetch := context.WithTimeout(r.Context(), fetchTimeout)
 		defer cancelFetch()
 		body, err := s3util.FetchObject(fetchCtx, s.s3client, s.cfg.S3.Bucket, route.S3Key)

@@ -22,7 +22,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cookiespooky/notepub/internal/config"
+	"github.com/cookiespooky/notepub/internal/localutil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
@@ -73,23 +75,36 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 
-	s3client, err := s3util.NewClient(ctx, s3util.Config{
-		Endpoint:       cfg.S3.Endpoint,
-		Region:         cfg.S3.Region,
-		ForcePathStyle: cfg.S3.ForcePathStyle,
-		Bucket:         cfg.S3.Bucket,
-		Prefix:         cfg.S3.Prefix,
-		AccessKey:      cfg.S3.AccessKey,
-		SecretKey:      cfg.S3.SecretKey,
-		Anonymous:      cfg.S3.Anonymous,
-	})
-	if err != nil {
-		return fmt.Errorf("s3 client: %w", err)
-	}
-
-	objects, err := s3util.ListObjects(ctx, s3client, cfg.S3.Bucket, cfg.S3.Prefix)
-	if err != nil {
-		return fmt.Errorf("list s3: %w", err)
+	var (
+		objects  []s3util.Object
+		s3client *s3.Client
+	)
+	switch cfg.Content.Source {
+	case "local":
+		objects, err = localutil.ListMarkdown(cfg.Content.LocalDir, cfg.S3.Prefix)
+		if err != nil {
+			return fmt.Errorf("list local: %w", err)
+		}
+	case "s3":
+		s3client, err = s3util.NewClient(ctx, s3util.Config{
+			Endpoint:       cfg.S3.Endpoint,
+			Region:         cfg.S3.Region,
+			ForcePathStyle: cfg.S3.ForcePathStyle,
+			Bucket:         cfg.S3.Bucket,
+			Prefix:         cfg.S3.Prefix,
+			AccessKey:      cfg.S3.AccessKey,
+			SecretKey:      cfg.S3.SecretKey,
+			Anonymous:      cfg.S3.Anonymous,
+		})
+		if err != nil {
+			return fmt.Errorf("s3 client: %w", err)
+		}
+		objects, err = s3util.ListObjects(ctx, s3client, cfg.S3.Bucket, cfg.S3.Prefix)
+		if err != nil {
+			return fmt.Errorf("list s3: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported content source: %s", cfg.Content.Source)
 	}
 
 	current := map[string]s3util.Object{}
@@ -167,7 +182,13 @@ func Run(ctx context.Context, cfg config.Config) error {
 			}
 		}
 
-		body, err := s3util.FetchObject(ctx, s3client, cfg.S3.Bucket, key)
+		var body []byte
+		switch cfg.Content.Source {
+		case "local":
+			body, err = localutil.FetchObject(cfg.Content.LocalDir, key)
+		case "s3":
+			body, err = s3util.FetchObject(ctx, s3client, cfg.S3.Bucket, key)
+		}
 		if err != nil {
 			return fmt.Errorf("fetch %s: %w", key, err)
 		}

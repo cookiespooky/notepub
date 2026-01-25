@@ -14,13 +14,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Build site
+        run: |
+          cat > config.ci.yaml <<'EOF'
+          site:
+            id: default
+            base_url: "https://cookiespooky.github.io/notepub/"
+            host: 127.0.0.1
+          content:
+            source: "local"
+            local_dir: "./markdown"
+          paths:
+            file_root: ./.notepub
+            artifacts_dir: ./.notepub/artifacts
+            snapshot_file: ./.notepub/snapshot/objects.json
+            cache_root: ./.notepub/cache
+          theme:
+            dir: ./themes
+            name: notepub
+            templates_subdir: templates
+            assets_subdir: assets
+          rules_path: ./rules.yaml
+          server:
+            listen: "127.0.0.1:8080"
+          cache:
+            html_ttl_seconds: 600
+            stale_if_error_seconds: 604800
+          EOF
+          go run ./cmd/notepub build --config ./config.ci.yaml --dist ./dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4

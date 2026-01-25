@@ -27,6 +27,7 @@
 /bin/
 /notepub
 /notepub.exe
+/dist/
 *.exe
 *.so
 *.dylib
@@ -40,6 +41,8 @@ data/
 storage/
 uploads/
 var/
+.notepub/
+dist/
 
 # ==========================
 # Local config / env

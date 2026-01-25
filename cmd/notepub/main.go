@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cookiespooky/notepub/internal/config"
 	"github.com/cookiespooky/notepub/internal/indexer"
 	"github.com/cookiespooky/notepub/internal/models"
@@ -164,18 +165,21 @@ func serveCmd(args []string) error {
 	}
 	log.Printf("theme loaded: path=%s fallback=%t", themeDir, theme.UsedFallback())
 
-	client, err := s3util.NewClient(context.Background(), s3util.Config{
-		Endpoint:       cfg.S3.Endpoint,
-		Region:         cfg.S3.Region,
-		ForcePathStyle: cfg.S3.ForcePathStyle,
-		Bucket:         cfg.S3.Bucket,
-		Prefix:         cfg.S3.Prefix,
-		AccessKey:      cfg.S3.AccessKey,
-		SecretKey:      cfg.S3.SecretKey,
-		Anonymous:      cfg.S3.Anonymous,
-	})
-	if err != nil {
-		return fmt.Errorf("s3 client: %w", err)
+	var client *s3.Client
+	if cfg.Content.Source == "s3" {
+		client, err = s3util.NewClient(context.Background(), s3util.Config{
+			Endpoint:       cfg.S3.Endpoint,
+			Region:         cfg.S3.Region,
+			ForcePathStyle: cfg.S3.ForcePathStyle,
+			Bucket:         cfg.S3.Bucket,
+			Prefix:         cfg.S3.Prefix,
+			AccessKey:      cfg.S3.AccessKey,
+			SecretKey:      cfg.S3.SecretKey,
+			Anonymous:      cfg.S3.Anonymous,
+		})
+		if err != nil {
+			return fmt.Errorf("s3 client: %w", err)
+		}
 	}
 
 	srv := serve.New(cfg, store, cache, theme, client, rulesCfg)

@@ -1,51 +1,44 @@
 site:
   id: default
-  base_url: "https://cookiespooky.github.io/notepub/"
-  media_base_url: "https://cdn.example.com"
-  host: example.com
-  host_aliases:
-    - www.example.com
+  base_url: "https://cookiespooky.github.io/notepub/" # http://127.0.0.1:8080 for local
+  host: 127.0.0.1
 
 s3:
-  endpoint: "https://s3.amazonaws.com"
+  endpoint: "http://127.0.0.1:9000" # local minio s3
   region: "us-east-1"
-  force_path_style: false
-  bucket: your-bucket
-  prefix: content/
-  # If access_key/secret_key are omitted, the AWS default credential chain is used.
-  access_key: AKIA...
-  secret_key: ...
-  # For public buckets, disable signing entirely.
-  anonymous: false
+  force_path_style: true
+  bucket: local-bucket
+  prefix: ""
+  access_key: minioadmin
+  secret_key: minioadmin
+
+content:
+  source: "local"  # "s3" or "local"
+  local_dir: "./markdown" # in case of "local"
 
 paths:
-  file_root: /var/lib/notepub
-  artifacts_dir: /var/lib/notepub/artifacts
-  snapshot_file: /var/lib/notepub/snapshot/objects.json
-  cache_root: /var/cache/notepub
+  file_root: ./.notepub
+  artifacts_dir: ./.notepub/artifacts
+  snapshot_file: ./.notepub/snapshot/objects.json
+  cache_root: ./.notepub/cache
 
 theme:
-  dir: /opt/notepub/themes
-  name: seo-minimal
+  dir: /Users/antonlozkin/Documents/notepub/themes
+  name: notepub
   templates_subdir: templates
   assets_subdir: assets
 
 server:
   listen: "127.0.0.1:8080"
 
-rules_path: /etc/notepub/rules.yaml
+rules_path: ./rules.yaml
 
 robots:
   disallow:
     - "/private/"
   extra: |
-    # Custom rules here
+    # Custom rules here (dev)
 
 cache:
   html_ttl_seconds: 600
   stale_if_error_seconds: 604800
-
-media:
-  # If true, /media/* serves any object under the prefix.
-  # Default behavior is to allow only referenced media.
-  expose_all_under_prefix: false

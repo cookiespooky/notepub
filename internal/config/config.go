@@ -15,18 +15,20 @@ const (
 	defaultCacheRoot  = "/var/cache/notepub"
 	defaultThemesDir  = "/opt/notepub/themes"
 	defaultThemeName  = "seo-minimal"
+	defaultLocalDir   = "markdown"
 )
 
 type Config struct {
-	Site      SiteConfig   `yaml:"site"`
-	S3        S3Config     `yaml:"s3"`
-	Paths     PathsConfig  `yaml:"paths"`
-	Theme     ThemeConfig  `yaml:"theme"`
-	Robots    RobotsConfig `yaml:"robots"`
-	Cache     CacheConfig  `yaml:"cache"`
-	Server    ServerConfig `yaml:"server"`
-	Media     MediaConfig  `yaml:"media"`
-	RulesPath string       `yaml:"rules_path"`
+	Site      SiteConfig    `yaml:"site"`
+	S3        S3Config      `yaml:"s3"`
+	Content   ContentConfig `yaml:"content"`
+	Paths     PathsConfig   `yaml:"paths"`
+	Theme     ThemeConfig   `yaml:"theme"`
+	Robots    RobotsConfig  `yaml:"robots"`
+	Cache     CacheConfig   `yaml:"cache"`
+	Server    ServerConfig  `yaml:"server"`
+	Media     MediaConfig   `yaml:"media"`
+	RulesPath string        `yaml:"rules_path"`
 }
 
 type SiteConfig struct {
@@ -46,6 +48,11 @@ type S3Config struct {
 	AccessKey      string `yaml:"access_key"`
 	SecretKey      string `yaml:"secret_key"`
 	Anonymous      bool   `yaml:"anonymous"`
+}
+
+type ContentConfig struct {
+	Source   string `yaml:"source"`
+	LocalDir string `yaml:"local_dir"`
 }
 
 type PathsConfig struct {
@@ -105,19 +112,57 @@ func Load(path string) (Config, error) {
 	cfg.Site.BaseURL = normalizeBaseURL(cfg.Site.BaseURL)
 	cfg.Site.MediaBaseURL = normalizeBaseURL(cfg.Site.MediaBaseURL)
 	cfg.S3.Prefix = normalizePrefix(cfg.S3.Prefix)
+	cfg.Content.Source = strings.ToLower(strings.TrimSpace(cfg.Content.Source))
+	if cfg.Content.Source == "" {
+		if cfg.S3.Bucket == "" {
+			cfg.Content.Source = "local"
+		} else {
+			cfg.Content.Source = "s3"
+		}
+	}
+	if cfg.Content.Source == "local" {
+		if cfg.Content.LocalDir == "" {
+			cfg.Content.LocalDir = defaultLocalDir
+		}
+		if !filepath.IsAbs(cfg.Content.LocalDir) {
+			cfg.Content.LocalDir = filepath.Join(filepath.Dir(path), cfg.Content.LocalDir)
+		}
+		cfg.Content.LocalDir = filepath.Clean(cfg.Content.LocalDir)
+	}
 	if cfg.Site.BaseURL == "" {
 		return Config{}, fmt.Errorf("site.base_url is required")
 	}
-	if cfg.S3.Bucket == "" {
-		return Config{}, fmt.Errorf("s3.bucket is required")
+	switch cfg.Content.Source {
+	case "s3":
+		if cfg.S3.Bucket == "" {
+			return Config{}, fmt.Errorf("s3.bucket is required")
+		}
+	case "local":
+		if cfg.Content.LocalDir == "" {
+			return Config{}, fmt.Errorf("content.local_dir is required for local source")
+		}
+	default:
+		return Config{}, fmt.Errorf("content.source must be \"s3\" or \"local\"")
 	}
-	if (cfg.S3.AccessKey == "" && cfg.S3.SecretKey != "") || (cfg.S3.AccessKey != "" && cfg.S3.SecretKey == "") {
-		return Config{}, fmt.Errorf("s3.access_key and s3.secret_key must be set together")
+	if cfg.Content.Source == "s3" {
+		if (cfg.S3.AccessKey == "" && cfg.S3.SecretKey != "") || (cfg.S3.AccessKey != "" && cfg.S3.SecretKey == "") {
+			return Config{}, fmt.Errorf("s3.access_key and s3.secret_key must be set together")
+		}
 	}
 	return cfg, nil
 }
 
 func applyDefaults(cfg *Config) {
+	if cfg.Content.Source == "" {
+		if cfg.S3.Bucket == "" {
+			cfg.Content.Source = "local"
+		} else {
+			cfg.Content.Source = "s3"
+		}
+	}
+	if cfg.Content.LocalDir == "" {
+		cfg.Content.LocalDir = defaultLocalDir
+	}
 	if cfg.Paths.FileRoot == "" {
 		cfg.Paths.FileRoot = defaultFileRoot
 	}

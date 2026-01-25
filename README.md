@@ -62,6 +62,8 @@ Notes:
 - `s3.region` and `s3.force_path_style` are supported.
 - If `s3.access_key`/`s3.secret_key` are omitted, the AWS default credential chain is used.
 - For public buckets, set `s3.anonymous: true` to disable signing.
+- `content.source` switches markdown source: `"s3"` or `"local"`. If `s3.bucket` is empty, local is used.
+- `content.local_dir` defaults to `./markdown` and is resolved relative to `config.yaml`.
 - `rules_path` points to `rules.yaml` (defaults to `rules.yaml` next to `config.yaml`).
 - `site.media_base_url` if unset keeps existing absolute media URLs and falls back to `/media/*` links.
 - `site.base_url` may include a non-root path (e.g., `https://user.github.io/repo/`).
