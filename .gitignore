@@ -47,8 +47,8 @@ dist/
 # ==========================
 # Local config / env
 # ==========================
-config.yaml
-rules.yaml
+#config.yaml
+#rules.yaml
 .env
 .env.*
 .direnv/

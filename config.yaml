@@ -1,0 +1,44 @@
+site:
+  id: default
+  base_url: "https://cookiespooky.github.io/notepub/" # http://127.0.0.1:8080 for local
+  host: 127.0.0.1
+
+s3:
+  endpoint: "http://127.0.0.1:9000" # local minio s3
+  region: "us-east-1"
+  force_path_style: true
+  bucket: local-bucket
+  prefix: ""
+  access_key: minioadmin
+  secret_key: minioadmin
+
+content:
+  source: "local"  # "s3" or "local"
+  local_dir: "./markdown" # in case of "local"
+
+paths:
+  file_root: ./.notepub
+  artifacts_dir: ./.notepub/artifacts
+  snapshot_file: ./.notepub/snapshot/objects.json
+  cache_root: ./.notepub/cache
+
+theme:
+  dir: /Users/antonlozkin/Documents/obsidian-website/themes
+  name: notepub
+  templates_subdir: templates
+  assets_subdir: assets
+
+server:
+  listen: "127.0.0.1:8080" # http://127.0.0.1:8080
+
+rules_path: ./rules.yaml
+
+robots:
+  disallow:
+    - "/private/"
+  extra: |
+    # Custom rules here (dev)
+
+cache:
+  html_ttl_seconds: 600
+  stale_if_error_seconds: 604800
