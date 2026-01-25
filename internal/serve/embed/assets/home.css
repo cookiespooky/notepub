@@ -1,0 +1,13 @@
+.np-home-hero {
+  padding: 32px 0 48px;
+  border-bottom: 1px solid #e3dccf;
+}
+
+.np-home-hero h1 {
+  font-size: 2.2rem;
+  margin: 0 0 16px;
+}
+
+.np-home-body {
+  font-size: 1.1rem;
+}

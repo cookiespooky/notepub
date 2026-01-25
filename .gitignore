@@ -25,8 +25,8 @@
 
 # Go binaries
 /bin/
-notepub
-notepub.exe
+/notepub
+/notepub.exe
 *.exe
 *.so
 *.dylib

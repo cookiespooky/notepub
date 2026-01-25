@@ -1,0 +1,49 @@
+<section class="section search-page">
+  <h1 class="section-title">Поиск</h1>
+  <form class="np-search-page-form" method="get" action="/search">
+    <input type="search" name="q" value="{{ .SearchQuery }}" placeholder="Search" autocomplete="off" />
+  </form>
+  {{- if .SearchQuery }}
+  <p class="np-search-summary">Запрос: {{ .SearchQuery }}</p>
+  {{- end }}
+  {{- if .SearchItems }}
+  <ul class="np-search-page-results">
+    {{- range .SearchItems }}
+    <li>
+      <a href="{{ .Path }}">{{ .Title }}</a>
+      {{- if .Snippet }}
+      <p>{{ .Snippet }}</p>
+      {{- end }}
+    </li>
+    {{- end }}
+  </ul>
+  {{- else }}
+  <p class="np-search-empty">Нет результатов.</p>
+  {{- end }}
+  {{- if .SearchNextCursor }}
+  <a class="np-search-more" href="/search?q={{ .SearchQuery }}&cursor={{ .SearchNextCursor }}">Следующая страница</a>
+  {{- end }}
+</section>
+<script>
+(function() {
+  if (window.__notepubSearchPageLoader) return;
+  window.__notepubSearchPageLoader = true;
+  var input = document.querySelector('.np-search-page-form input[name="q"]');
+  if (!input) return;
+  var loaded = false;
+  function load() {
+    if (loaded) return;
+    loaded = true;
+    var s = document.createElement('script');
+    s.src = '/assets/search-page.js';
+    s.async = true;
+    s.onload = function() {
+      if (window.NotepubSearchPage && window.NotepubSearchPage.init) {
+        window.NotepubSearchPage.init();
+      }
+    };
+    document.head.appendChild(s);
+  }
+  input.addEventListener('focus', load, { once: true });
+})();
+</script>

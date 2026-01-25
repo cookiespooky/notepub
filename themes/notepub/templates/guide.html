@@ -1,0 +1,29 @@
+<article class="content guide">
+  <header class="page-hero">
+    <span class="mode-pill">📘 Практическое руководство</span>
+    <h1>{{ .Title }}</h1>
+    {{- if .Page.Description }}
+    <p class="lead">{{ .Page.Description }}</p>
+    {{- end }}
+  </header>
+  {{ .Body }}
+</article>
+
+{{- if .Collections.related_pages.Items }}
+<section class="section">
+  <h2 class="section-title">Связанные материалы</h2>
+  <div class="grid">
+    {{- range .Collections.related_pages.Items }}
+    <article class="card">
+      <div class="card-meta">
+        <span class="card-tag">{{ .Type }}</span>
+      </div>
+      <h3><a href="{{ .Path }}">{{ .Title }}</a></h3>
+      {{- if .Description }}
+      <p>{{ .Description }}</p>
+      {{- end }}
+    </article>
+    {{- end }}
+  </div>
+</section>
+{{- end }}

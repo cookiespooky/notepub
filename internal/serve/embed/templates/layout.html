@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/assets/styles.css">
+  {{- if .Meta.Robots }}
+  <meta name="robots" content="{{ .Meta.Robots }}">
+  {{- end }}
+  {{- if .Canonical }}
+  <link rel="canonical" href="{{ .Canonical }}">
+  {{- end }}
+  {{- range .Meta.OpenGraph }}
+  <meta property="{{ .Key }}" content="{{ .Value }}">
+  {{- end }}
+  {{- if .Meta.JSONLD }}
+  <script type="application/ld+json">{{ .Meta.JSONLD }}</script>
+  {{- end }}
+  {{- if and .IsHome .HasHomeCSS }}
+  <link rel="stylesheet" href="/assets/home.css">
+  {{- end }}
+  <title>{{ .Title }}</title>
+</head>
+<body>
+  <div class="np-shell">
+    <header class="np-header">
+      <a class="np-brand" href="/">notepub</a>
+      {{ template "search_trigger.html" . }}
+    </header>
+    <main class="np-content">
+      {{ .Body }}
+    </main>
+    <footer class="np-footer">
+      <span>Published with Notepub</span>
+    </footer>
+  </div>
+</body>
+</html>

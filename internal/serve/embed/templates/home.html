@@ -1,0 +1,36 @@
+<section class="np-home-hero">
+  <div>This is home page embedded template</div>
+  <h1>{{ .Title }}</h1>
+  <div class="np-home-body">
+    {{ .Body }}
+  </div>
+  {{- if .Catalog }}
+  <div class="np-catalog">
+    <div class="np-category-grid">
+      {{- range .Catalog.Categories }}
+      <section class="np-category-card">
+        {{- if .Image }}
+        <a href="{{ .Path }}"><img src="{{ .Image }}" alt="{{ .Title }}"></a>
+        {{- end }}
+        <h2><a href="{{ .Path }}">{{ .Title }}</a></h2>
+        {{- if .Description }}
+        <p>{{ .Description }}</p>
+        {{- end }}
+        {{- if .Items }}
+        <ul>
+          {{- range .Items }}
+          <li>
+            <a href="{{ .Path }}">{{ .Title }}</a>
+            {{- if .Image }}
+            <img src="{{ .Image }}" alt="{{ .Title }}">
+            {{- end }}
+          </li>
+          {{- end }}
+        </ul>
+        {{- end }}
+      </section>
+      {{- end }}
+    </div>
+  </div>
+  {{- end }}
+</section>

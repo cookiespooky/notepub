@@ -1,0 +1,24 @@
+<section class="np-category">
+  <h1>{{ .Title }}</h1>
+  {{- if .Category.Description }}
+  <p class="np-category-description">{{ .Category.Description }}</p>
+  {{- end }}
+  <div class="np-category-body">
+    {{ .Body }}
+  </div>
+  {{- if .CategoryItems }}
+  <div class="np-category-items">
+    <h2>Материалы</h2>
+    <ul>
+      {{- range .CategoryItems }}
+      <li>
+        <a href="{{ .Path }}">{{ .Title }}</a>
+        {{- if .Description }}
+        <p>{{ .Description }}</p>
+        {{- end }}
+      </li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+</section>

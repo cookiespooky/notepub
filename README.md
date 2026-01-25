@@ -1,6 +1,7 @@
 # Notepub (self-hosted MVP)
 
 Single-binary self-hosted publishing engine for Obsidian notes stored in your S3 bucket.
+[https://cookiespooky.github.io/notepub](https://cookiespooky.github.io/notepub)
 
 ## How it works
 
@@ -225,8 +226,8 @@ mc mb local/local-bucket
 
 4) Run Notepub locally:
 ```
-./apps/notepub/notepub index --config ./config.local.yaml
-./apps/notepub/notepub serve --config ./config.local.yaml
+./notepub index --config ./config.local.yaml
+./notepub serve --config ./config.local.yaml
 ```
 
 If your bucket name, credentials, or MinIO endpoint differ, update `config.local.yaml` accordingly.

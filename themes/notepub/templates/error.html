@@ -1,0 +1,7 @@
+<section class="section">
+  <h1 class="section-title">Render error</h1>
+  <p class="lead">Шаблон не смог отрендерить страницу. Причина ниже.</p>
+  {{- if .Error }}
+  <pre class="code">{{ .Error }}</pre>
+  {{- end }}
+</section>

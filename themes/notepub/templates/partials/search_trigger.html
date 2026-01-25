@@ -1,0 +1,55 @@
+{{ define "search_trigger.html" }}
+<div class="np-search">
+  <a id="np-search-trigger" class="np-search-trigger" href="/search" aria-haspopup="dialog" aria-controls="np-search-dialog" aria-label="Search">🔍</a>
+</div>
+<dialog id="np-search-dialog" class="np-search-dialog" aria-label="Search" role="dialog">
+  <form class="np-search-form" method="get" action="/search">
+    <input type="search" name="q" placeholder="Search" autocomplete="off" />
+    <button type="submit">Search</button>
+    <button type="button" class="np-search-close" data-action="close" aria-label="Close">×</button>
+  </form>
+  <div class="np-search-status" aria-live="polite"></div>
+  <div class="np-search-results" role="listbox"></div>
+  <a class="np-search-all" href="/search">Все результаты</a>
+</dialog>
+<div class="np-search-backdrop" data-action="close" hidden></div>
+<script>
+(function() {
+  if (window.__notepubSearchLoader) return;
+  window.__notepubSearchLoader = true;
+  var trigger = document.getElementById('np-search-trigger');
+  if (!trigger) return;
+  var loading = false;
+  trigger.addEventListener('click', function(e) {
+    if (loading) return;
+    if (window.NotepubSearchModal && window.NotepubSearchModal.open) {
+      e.preventDefault();
+      window.NotepubSearchModal.open();
+      return;
+    }
+    e.preventDefault();
+    loading = true;
+    var s = document.createElement('script');
+    s.src = '/assets/search-modal.js';
+    s.async = true;
+    s.onload = function() {
+      loading = false;
+      if (window.NotepubSearchModal && window.NotepubSearchModal.init) {
+        window.NotepubSearchModal.init({
+          mount: document.getElementById('np-search-dialog'),
+          endpoint: '/v1/search'
+        });
+        window.NotepubSearchModal.open();
+      } else {
+        window.location.href = trigger.href;
+      }
+    };
+    s.onerror = function() {
+      loading = false;
+      window.location.href = trigger.href;
+    };
+    document.head.appendChild(s);
+  });
+})();
+</script>
+{{ end }}
