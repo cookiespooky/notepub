@@ -64,6 +64,7 @@ Notes:
 - For public buckets, set `s3.anonymous: true` to disable signing.
 - `content.source` switches markdown source: `"s3"` or `"local"`. If `s3.bucket` is empty, local is used.
 - `content.local_dir` defaults to `./markdown` and is resolved relative to `config.yaml`.
+- OpenGraph defaults can be set via `site.title`, `site.description`, `site.default_og_image`, and `og_type_by_type`.
 - `rules_path` points to `rules.yaml` (defaults to `rules.yaml` next to `config.yaml`).
 - `site.media_base_url` if unset keeps existing absolute media URLs and falls back to `/media/*` links.
 - `site.base_url` may include a non-root path (e.g., `https://user.github.io/repo/`).

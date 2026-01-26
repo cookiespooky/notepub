@@ -12,7 +12,7 @@
     <ul>
       {{- range .CategoryItems }}
       <li>
-        <a href="{{ .Path }}">{{ .Title }}</a>
+        <a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a>
         {{- if .Description }}
         <p>{{ .Description }}</p>
         {{- end }}

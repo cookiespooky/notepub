@@ -72,14 +72,14 @@
               {{- range .Collections.docs_hubs.Items }}
               {{- $hubKey := printf "[[%s]]" .Slug }}
               <li class="sidebar-group">
-                <a class="{{ if eq .Slug $.Page.Slug }}is-active{{ end }}" href="{{ .Path }}">{{ .Title }}</a>
+                <a class="{{ if eq .Slug $.Page.Slug }}is-active{{ end }}" href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a>
                 {{- if $groups }}
                 <ul class="sidebar-sublist">
                   {{- range $groups }}
                     {{- if eq .Key $hubKey }}
                       {{- range .Items }}
                       <li>
-                        <a class="{{ if and (eq .Slug $.Page.Slug) (ne $.Page.Type "hub") }}is-active{{ end }}" href="{{ .Path }}">{{ .Title }}</a>
+                        <a class="{{ if and (eq .Slug $.Page.Slug) (ne $.Page.Type "hub") }}is-active{{ end }}" href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a>
                       </li>
                       {{- end }}
                     {{- end }}

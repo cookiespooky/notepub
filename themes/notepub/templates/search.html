@@ -10,7 +10,7 @@
   <ul class="np-search-page-results">
     {{- range .SearchItems }}
     <li>
-      <a href="{{ .Path }}">{{ .Title }}</a>
+      <a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a>
       {{- if .Snippet }}
       <p>{{ .Snippet }}</p>
       {{- end }}

@@ -19,24 +19,28 @@ const (
 )
 
 type Config struct {
-	Site      SiteConfig    `yaml:"site"`
-	S3        S3Config      `yaml:"s3"`
-	Content   ContentConfig `yaml:"content"`
-	Paths     PathsConfig   `yaml:"paths"`
-	Theme     ThemeConfig   `yaml:"theme"`
-	Robots    RobotsConfig  `yaml:"robots"`
-	Cache     CacheConfig   `yaml:"cache"`
-	Server    ServerConfig  `yaml:"server"`
-	Media     MediaConfig   `yaml:"media"`
-	RulesPath string        `yaml:"rules_path"`
+	Site         SiteConfig        `yaml:"site"`
+	S3           S3Config          `yaml:"s3"`
+	Content      ContentConfig     `yaml:"content"`
+	OGTypeByType map[string]string `yaml:"og_type_by_type"`
+	Paths        PathsConfig       `yaml:"paths"`
+	Theme        ThemeConfig       `yaml:"theme"`
+	Robots       RobotsConfig      `yaml:"robots"`
+	Cache        CacheConfig       `yaml:"cache"`
+	Server       ServerConfig      `yaml:"server"`
+	Media        MediaConfig       `yaml:"media"`
+	RulesPath    string            `yaml:"rules_path"`
 }
 
 type SiteConfig struct {
-	ID           string   `yaml:"id"`
-	BaseURL      string   `yaml:"base_url"`
-	MediaBaseURL string   `yaml:"media_base_url"`
-	Host         string   `yaml:"host"`
-	HostAliases  []string `yaml:"host_aliases"`
+	ID             string   `yaml:"id"`
+	BaseURL        string   `yaml:"base_url"`
+	Title          string   `yaml:"title"`
+	Description    string   `yaml:"description"`
+	DefaultOGImage string   `yaml:"default_og_image"`
+	MediaBaseURL   string   `yaml:"media_base_url"`
+	Host           string   `yaml:"host"`
+	HostAliases    []string `yaml:"host_aliases"`
 }
 
 type S3Config struct {

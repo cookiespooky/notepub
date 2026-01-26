@@ -14,7 +14,7 @@
   <div class="grid">
     {{- range .Collections.related_pages.Items }}
     <article class="card">
-      <h3><a href="{{ .Path }}">{{ .Title }}</a></h3>
+      <h3><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></h3>
       {{- if .Description }}
       <p>{{ .Description }}</p>
       {{- end }}

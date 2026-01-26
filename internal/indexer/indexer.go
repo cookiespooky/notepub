@@ -248,7 +248,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		usedPaths[pathVal] = true
 		typeCounts[core.Type]++
 
-		metaEntry := buildMetaEntry(metaMap, core, content, cfg.Site.BaseURL, pathVal, key, cfg.S3.Prefix)
+		metaEntry := buildMetaEntry(metaMap, core, content, cfg.Site, cfg.OGTypeByType, pathVal, key, cfg.S3.Prefix)
 		routeEntry := buildRouteEntry(metaMap, metaEntry, key, obj.ETag, lm, pathVal)
 		mediaKeys := extractMediaKeysFromContent(string(content), key, cfg.S3.Prefix)
 		if len(mediaKeys) > 0 {
@@ -424,10 +424,10 @@ func filenameBase(key string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte, baseURL, pathVal, s3Key, prefix string) models.MetaEntry {
+func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte, site config.SiteConfig, ogTypeByType map[string]string, pathVal, s3Key, prefix string) models.MetaEntry {
 	canonical := stringFromMeta(meta, "canonical")
 	if canonical == "" {
-		canonical = buildAbsoluteURL(baseURL, pathVal)
+		canonical = buildAbsoluteURL(site.BaseURL, pathVal)
 	}
 	robots := stringFromMeta(meta, "robots")
 	noindex := boolFromMeta(meta, "noindex")
@@ -439,22 +439,53 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 		}
 	}
 
+	jsonld := jsonFromMeta(meta, "jsonld")
 	og := mapFromMeta(meta, "opengraph")
 	if len(og) == 0 {
 		og = mapFromMeta(meta, "og")
 	}
-
-	jsonld := jsonFromMeta(meta, "jsonld")
-	imageURL := ""
-	if len(content) > 0 {
-		imageURL = resolveImageURLFromContent(string(content), s3Key, prefix, baseURL)
+	if og == nil {
+		og = map[string]string{}
 	}
+
+	ogTitle := firstNonEmpty(
+		stringFromMeta(meta, "og_title"),
+		stringFromMeta(meta, "title"),
+		site.Title,
+	)
+	ogDescription := firstNonEmpty(
+		stringFromMeta(meta, "og_description"),
+		stringFromMeta(meta, "description"),
+		excerptFromContent(content, 180),
+		site.Description,
+	)
+	ogURL := canonical
+	ogType := firstNonEmpty(
+		stringFromMeta(meta, "og_type"),
+		mapLookup(ogTypeByType, core.Type),
+		"website",
+	)
+
+	imageURL := ""
+	imageAlt := ""
+	fmImage := stringFromMeta(meta, "og_image")
+	if fmImage != "" {
+		imageURL = resolveImageURLFromHref(fmImage, s3Key, prefix, site.BaseURL)
+	} else if len(content) > 0 {
+		imageURL, imageAlt = resolveImageURLFromContentWithAlt(string(content), s3Key, prefix, site.BaseURL)
+	}
+	if imageURL == "" && site.DefaultOGImage != "" {
+		imageURL = resolveImageURLFromHref(site.DefaultOGImage, s3Key, prefix, site.BaseURL)
+	}
+
+	setDefaultOG(og, "title", ogTitle)
+	setDefaultOG(og, "description", ogDescription)
+	setDefaultOG(og, "url", ogURL)
+	setDefaultOG(og, "type", ogType)
 	if imageURL != "" {
-		if og == nil {
-			og = map[string]string{}
-		}
-		if _, ok := og["image"]; !ok {
-			og["image"] = imageURL
+		setDefaultOG(og, "image", imageURL)
+		if imageAlt != "" {
+			setDefaultOG(og, "image:alt", imageAlt)
 		}
 	}
 
@@ -920,7 +951,50 @@ func typeAllowed(value string, allowed []string) bool {
 }
 
 func resolveImageURLFromContent(markdown, s3Key, prefix, baseURL string) string {
-	href := extractFirstImage(markdown)
+	url, _ := resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, baseURL)
+	return url
+}
+
+func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, baseURL string) (string, string) {
+	href, alt := extractFirstImageWithAlt(markdown)
+	if href == "" {
+		return "", ""
+	}
+	url := resolveImageURLFromHref(href, s3Key, prefix, baseURL)
+	return url, alt
+}
+
+func extractFirstImageWithAlt(markdown string) (string, string) {
+	markdown = normalizeLineEndings(markdown)
+	if m := embedImageRe.FindStringSubmatch(markdown); len(m) > 1 {
+		target, alt := parseEmbedTarget(m[1])
+		return target, alt
+	}
+	if m := mdImageRe.FindStringSubmatch(markdown); len(m) > 2 {
+		return strings.TrimSpace(m[2]), strings.TrimSpace(m[1])
+	}
+	return "", ""
+}
+
+func parseEmbedTarget(inner string) (string, string) {
+	inner = strings.TrimSpace(inner)
+	if inner == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(inner, "|", 2)
+	target := strings.TrimSpace(parts[0])
+	if len(parts) == 1 {
+		return target, ""
+	}
+	candidate := strings.TrimSpace(parts[1])
+	if candidate == "" || sizeRe.MatchString(candidate) {
+		return target, ""
+	}
+	return target, candidate
+}
+
+func resolveImageURLFromHref(href, s3Key, prefix, baseURL string) string {
+	href = strings.TrimSpace(href)
 	if href == "" {
 		return ""
 	}
@@ -944,27 +1018,6 @@ func resolveImageURLFromContent(markdown, s3Key, prefix, baseURL string) string 
 		return ""
 	}
 	return strings.TrimRight(baseURL, "/") + "/media/" + escapePath(key)
-}
-
-func extractFirstImage(markdown string) string {
-	markdown = normalizeLineEndings(markdown)
-	if m := embedImageRe.FindStringSubmatch(markdown); len(m) > 1 {
-		return extractEmbedTarget(m[1])
-	}
-	if m := mdImageRe.FindStringSubmatch(markdown); len(m) > 2 {
-		return strings.TrimSpace(m[2])
-	}
-	return ""
-}
-
-func extractEmbedTarget(inner string) string {
-	inner = strings.TrimSpace(inner)
-	if inner == "" {
-		return ""
-	}
-	parts := strings.SplitN(inner, "|", 2)
-	target := strings.TrimSpace(parts[0])
-	return target
 }
 
 func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
@@ -992,7 +1045,7 @@ func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
 		if len(match) < 2 {
 			continue
 		}
-		target := extractEmbedTarget(match[1])
+		target, _ := parseEmbedTarget(match[1])
 		if key := resolveMediaKey(target, baseDir, prefix); key != "" {
 			addKey(key)
 		}
@@ -1060,15 +1113,73 @@ func normalizeLineEndings(markdown string) string {
 	return strings.ReplaceAll(markdown, "\r\n", "\n")
 }
 
+func excerptFromContent(content []byte, maxLen int) string {
+	if len(content) == 0 || maxLen <= 0 {
+		return ""
+	}
+	text := normalizeLineEndings(string(content))
+	text = codeFenceRe.ReplaceAllString(text, " ")
+	text = inlineCodeRe.ReplaceAllString(text, " ")
+	text = embedImageRe.ReplaceAllStringFunc(text, func(match string) string {
+		parts := embedImageRe.FindStringSubmatch(match)
+		if len(parts) < 2 {
+			return " "
+		}
+		target, alt := parseEmbedTarget(parts[1])
+		if alt != "" {
+			return alt
+		}
+		return strings.TrimSpace(target)
+	})
+	text = mdImageRe.ReplaceAllString(text, "$1")
+	text = mdLinkRe.ReplaceAllString(text, "$1")
+	text = wikiLinkRe.ReplaceAllStringFunc(text, func(match string) string {
+		inner := strings.TrimSuffix(strings.TrimPrefix(match, "[["), "]]")
+		parts := strings.SplitN(inner, "|", 2)
+		if len(parts) == 2 {
+			return strings.TrimSpace(parts[1])
+		}
+		return strings.TrimSpace(parts[0])
+	})
+	text = htmlTagRe.ReplaceAllString(text, " ")
+	text = markdownSymbolRe.ReplaceAllString(text, " ")
+	text = spaceRe.ReplaceAllString(text, " ")
+	text = strings.TrimSpace(text)
+	return truncateAtWord(text, maxLen)
+}
+
+func truncateAtWord(text string, maxLen int) string {
+	if text == "" {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxLen {
+		return text
+	}
+	trunc := strings.TrimSpace(string(runes[:maxLen]))
+	lastSpace := strings.LastIndexAny(trunc, " \t\n")
+	if lastSpace > maxLen/2 {
+		trunc = strings.TrimSpace(trunc[:lastSpace])
+	}
+	return trunc
+}
+
 func isExternalURL(href string) bool {
 	lower := strings.ToLower(href)
 	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "//")
 }
 
 var (
-	embedImageRe = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
-	mdImageRe    = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
-	wikiLinkRe   = regexp.MustCompile(`\[\[[^\]]+\]\]`)
+	embedImageRe     = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
+	mdImageRe        = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+	wikiLinkRe       = regexp.MustCompile(`\[\[[^\]]+\]\]`)
+	mdLinkRe         = regexp.MustCompile(`\[(?s:.*?)\]\([^)]+\)`)
+	codeFenceRe      = regexp.MustCompile("(?s)```.*?```")
+	inlineCodeRe     = regexp.MustCompile("`[^`]*`")
+	htmlTagRe        = regexp.MustCompile(`</?[^>]+>`)
+	markdownSymbolRe = regexp.MustCompile(`(?m)^\s*[#>*\-+]+\s*`)
+	spaceRe          = regexp.MustCompile(`\s+`)
+	sizeRe           = regexp.MustCompile(`^\d+(x\d+)?$`)
 )
 
 func buildRouteETag(routePath string, status int, redirectTo, s3Key, etag, lastModified, metaHash string) string {
@@ -1122,6 +1233,32 @@ func stringFromMeta(meta map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func mapLookup(m map[string]string, key string) string {
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(m[key])
+}
+
+func setDefaultOG(og map[string]string, key, val string) {
+	if og == nil || val == "" {
+		return
+	}
+	if _, ok := og[key]; ok {
+		return
+	}
+	og[key] = val
 }
 
 func boolFromMeta(meta map[string]interface{}, key string) bool {

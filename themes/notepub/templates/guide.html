@@ -18,7 +18,7 @@
       <div class="card-meta">
         <span class="card-tag">{{ .Type }}</span>
       </div>
-      <h3><a href="{{ .Path }}">{{ .Title }}</a></h3>
+      <h3><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></h3>
       {{- if .Description }}
       <p>{{ .Description }}</p>
       {{- end }}

@@ -1,9 +1,12 @@
 site:
   id: default
   base_url: "https://cookiespooky.github.io/notepub/" # http://127.0.0.1:8080 for local
+  title: "Notepub"
+  description: "Notepub: Markdown → умный сайт"
+  default_og_image: ""
   host: 127.0.0.1
 
-s3:
+s3: # for content.source == "s3"
   endpoint: "http://127.0.0.1:9000" # local minio s3
   region: "us-east-1"
   force_path_style: true
@@ -16,7 +19,11 @@ content:
   source: "local"  # "s3" or "local"
   local_dir: "./markdown" # in case of "local"
 
-paths:
+og_type_by_type:
+  article: "article"
+  page: "website"
+
+paths: # for serve mode indexed artifacts
   file_root: ./.notepub
   artifacts_dir: ./.notepub/artifacts
   snapshot_file: ./.notepub/snapshot/objects.json
