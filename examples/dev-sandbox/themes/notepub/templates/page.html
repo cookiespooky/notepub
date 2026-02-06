@@ -1,9 +1,9 @@
 <article class="content">
-  <header class="page-hero">
+  <div class="page-hero">
     <h1>{{ .Title }}</h1>
     {{- if .Page.Description }}
     <p class="lead">{{ .Page.Description }}</p>
     {{- end }}
-  </header>
+  </div>
   {{ .Body }}
 </article>

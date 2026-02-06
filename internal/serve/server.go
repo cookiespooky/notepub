@@ -332,21 +332,41 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	}
 	var markdown string
 	if s.cfg.Content.Source == "local" {
-		body, err := localutil.FetchObject(s.cfg.Content.LocalDir, route.S3Key)
+		localPath, err := localutil.ResolvePath(s.cfg.Content.LocalDir, route.S3Key)
 		if err != nil {
 			s.serveStaleOr503(w, r, pathVal)
 			return
 		}
-		markdown = string(body)
+		file, err := os.Open(localPath)
+		if err != nil {
+			s.serveStaleOr503(w, r, pathVal)
+			return
+		}
+		defer file.Close()
+		body, err := readMarkdownLimited(file)
+		if err != nil {
+			s.serveStaleOr503(w, r, pathVal)
+			return
+		}
+		markdown = body
 	} else if s.cfg.S3.Anonymous {
 		fetchCtx, cancelFetch := context.WithTimeout(r.Context(), fetchTimeout)
 		defer cancelFetch()
-		body, err := s3util.FetchObject(fetchCtx, s.s3client, s.cfg.S3.Bucket, route.S3Key)
+		resp, err := s.s3client.GetObject(fetchCtx, &s3.GetObjectInput{
+			Bucket: &s.cfg.S3.Bucket,
+			Key:    &route.S3Key,
+		})
 		if err != nil {
 			s.serveStaleOr503(w, r, pathVal)
 			return
 		}
-		markdown = string(body)
+		defer resp.Body.Close()
+		body, err := readMarkdownLimited(resp.Body)
+		if err != nil {
+			s.serveStaleOr503(w, r, pathVal)
+			return
+		}
+		markdown = body
 	} else {
 		psCtx, cancelPresign := context.WithTimeout(r.Context(), presignTimeout)
 		defer cancelPresign()
@@ -375,7 +395,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[string]string) (string, error) {
-	markdown = normalizeMarkdownImages(markdown, baseKey, s.cfg.S3.Prefix)
+	markdown = normalizeMarkdownImages(markdown, baseKey, s.cfg.S3.Prefix, s.cfg.Site.MediaBaseURL)
 	markdown = normalizeMarkdownLinks(markdown, wikiMap)
 	var buf strings.Builder
 	if err := s.md.Convert([]byte(markdown), &buf); err != nil {
@@ -439,7 +459,9 @@ func buildPageData(meta models.MetaEntry, body, baseURL string) PageData {
 		}
 	}
 	if len(meta.JSONLD) > 0 {
-		data.Meta.JSONLD = string(meta.JSONLD)
+		if json.Valid(meta.JSONLD) {
+			data.Meta.JSONLD = template.JS(meta.JSONLD)
+		}
 	}
 	return data
 }
@@ -530,7 +552,11 @@ func fetchPresigned(ctx context.Context, url string) (string, error) {
 	if res.StatusCode != 200 {
 		return "", fmt.Errorf("fetch presigned status %d", res.StatusCode)
 	}
-	limited := io.LimitReader(res.Body, maxMarkdown+1)
+	return readMarkdownLimited(res.Body)
+}
+
+func readMarkdownLimited(r io.Reader) (string, error) {
+	limited := io.LimitReader(r, maxMarkdown+1)
 	b, err := io.ReadAll(limited)
 	if err != nil {
 		return "", err

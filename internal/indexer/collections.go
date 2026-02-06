@@ -95,6 +95,7 @@ func buildCollectionItem(idx models.ResolveIndex, pathVal string) models.Collect
 		Title:       meta.Title,
 		Description: meta.Description,
 		Canonical:   meta.Canonical,
+		Image:       meta.Image,
 		UpdatedAt:   route.LastModified,
 		NoIndex:     route.NoIndex,
 		FM:          meta.FM,

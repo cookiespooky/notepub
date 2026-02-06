@@ -1,14 +1,14 @@
 package serve
 
 import (
-	"net/url"
-	"path"
 	"regexp"
 	"strings"
 
 	"github.com/gosimple/slug"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+
+	"github.com/cookiespooky/notepub/internal/mediautil"
 )
 
 var (
@@ -19,13 +19,9 @@ var (
 	fmRe    = regexp.MustCompile(`(?s)^\s*---\s*\n.*?\n---\s*\n`)
 )
 
-func normalizeMarkdownImages(markdown, baseKey, prefix string) string {
+func normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase string) string {
 	markdown = normalizeLineEndings(markdown)
 	markdown = stripFrontmatter(markdown)
-	baseDir := path.Dir(strings.TrimPrefix(baseKey, "/"))
-	if baseDir == "." {
-		baseDir = ""
-	}
 
 	markdown = embedRe.ReplaceAllStringFunc(markdown, func(match string) string {
 		parts := embedRe.FindStringSubmatch(match)
@@ -37,7 +33,7 @@ func normalizeMarkdownImages(markdown, baseKey, prefix string) string {
 			return match
 		}
 		pathPart, alt := splitEmbed(inner)
-		resolved := resolveMediaPath(pathPart, baseDir, prefix)
+		resolved := mediautil.ResolveMediaLink(pathPart, baseKey, prefix, mediaBase)
 		return "![" + alt + "](" + resolved + ")"
 	})
 
@@ -48,7 +44,7 @@ func normalizeMarkdownImages(markdown, baseKey, prefix string) string {
 		}
 		alt := parts[1]
 		href := strings.TrimSpace(parts[2])
-		resolved := resolveMediaPath(href, baseDir, prefix)
+		resolved := mediautil.ResolveMediaLink(href, baseKey, prefix, mediaBase)
 		if resolved == href {
 			return match
 		}
@@ -61,10 +57,6 @@ func normalizeMarkdownImages(markdown, baseKey, prefix string) string {
 func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string) string {
 	markdown = normalizeLineEndings(markdown)
 	markdown = stripFrontmatter(markdown)
-	baseDir := path.Dir(strings.TrimPrefix(baseKey, "/"))
-	if baseDir == "." {
-		baseDir = ""
-	}
 
 	markdown = embedRe.ReplaceAllStringFunc(markdown, func(match string) string {
 		parts := embedRe.FindStringSubmatch(match)
@@ -76,7 +68,7 @@ func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string
 			return match
 		}
 		pathPart, alt := splitEmbed(inner)
-		resolved := resolveMediaURLForBuild(pathPart, baseDir, prefix, mediaBase)
+		resolved := mediautil.ResolveMediaLink(pathPart, baseKey, prefix, mediaBase)
 		return "![" + alt + "](" + resolved + ")"
 	})
 
@@ -87,7 +79,7 @@ func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string
 		}
 		alt := parts[1]
 		href := strings.TrimSpace(parts[2])
-		resolved := resolveMediaURLForBuild(href, baseDir, prefix, mediaBase)
+		resolved := mediautil.ResolveMediaLink(href, baseKey, prefix, mediaBase)
 		if resolved == href {
 			return match
 		}
@@ -188,78 +180,12 @@ func normalizeWikiTarget(name string) string {
 	return strings.TrimSpace(name)
 }
 
-func resolveMediaPath(href, baseDir, prefix string) string {
-	href = strings.TrimSpace(href)
-	if href == "" {
-		return href
-	}
-	if isExternal(href) || strings.HasPrefix(href, "/") {
-		return href
-	}
-	key := href
-	if prefix != "" && strings.HasPrefix(key, prefix) {
-		// already a full key
-	} else if baseDir != "" {
-		key = path.Join(baseDir, key)
-	}
-	key = strings.TrimPrefix(key, "/")
-	if key == "" {
-		return href
-	}
-	return "/media/" + escapePath(key)
-}
-
-func resolveMediaURLForBuild(href, baseDir, prefix, mediaBase string) string {
-	href = strings.TrimSpace(href)
-	if href == "" {
-		return href
-	}
-	if isExternal(href) {
-		return href
-	}
-	mediaBase = strings.TrimRight(mediaBase, "/")
-	if strings.HasPrefix(href, "/media/") {
-		if mediaBase == "" {
-			return href
-		}
-		key := strings.TrimPrefix(href, "/media/")
-		key = strings.TrimPrefix(key, "/")
-		if key == "" {
-			return href
-		}
-		return mediaBase + "/" + escapePath(key)
-	}
-	if strings.HasPrefix(href, "/") {
-		return href
-	}
-	key := href
-	if prefix != "" && strings.HasPrefix(key, prefix) {
-		key = strings.TrimPrefix(key, prefix)
-		key = strings.TrimPrefix(key, "/")
-	} else if baseDir != "" {
-		key = path.Join(baseDir, key)
-	}
-	key = strings.TrimPrefix(key, "/")
-	if key == "" {
-		return href
-	}
-	if mediaBase == "" {
-		return "/media/" + escapePath(key)
-	}
-	return mediaBase + "/" + escapePath(key)
-}
-
 func isExternal(href string) bool {
-	lower := strings.ToLower(href)
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "//")
+	return mediautil.IsExternal(href)
 }
 
 func escapePath(p string) string {
-	parts := strings.Split(p, "/")
-	for i := range parts {
-		parts[i] = url.PathEscape(parts[i])
-	}
-	return strings.Join(parts, "/")
+	return mediautil.EscapePath(p)
 }
 
 func newMarkdownRenderer() goldmark.Markdown {

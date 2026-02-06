@@ -1,0 +1,231 @@
+<div class="hero">
+  <div class="kicker">
+    <span class="dot" aria-hidden="true"></span>
+    Open source
+  </div>
+
+  <h1>Публикуйте Markdown-контент в один клик</h1>
+
+  <p class="subhead">
+    Notepub превращает ваш Markdown в быстрые, SEO-дружелюбные сайты, блоги и базы знаний — без CMS, админок и
+    vendor lock-in
+  </p>
+</div>
+
+<section id="principles">
+  <div class="grid grid-3">
+    <div class="card">
+      <h3>🔥 Без CMS</h3>
+      <p>Никаких админок и баз данных.</p>
+    </div>
+    <div class="card">
+      <h3>📈 SEO по умолчанию</h3>
+      <p>sitemap, opengraph, JSON-LD, robots.txt.</p>
+    </div>
+    <div class="card">
+      <h3>⚡ Без JS и зависимостей</h3>
+      <p>Чистый HTML, минимальный вес.</p>
+    </div>
+    <div class="card">
+      <h3>🔒 Контент принадлежит вам</h3>
+      <p>Нет привязки к платформам.</p>
+    </div>
+    <div class="card">
+      <h3>🧠 Гибкая структура</h3>
+      <p>Вы описываете правила, остальное делает Notepub.</p>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <h2 class="section-title">Как это работает</h2>
+  <div class="card-list">
+    <article class="card list-card">
+      <h3>✍️ Вы пишете контент в Markdown</h3>
+      <p>Локально, в S3, Obsidian, Notion — где угодно.</p>
+    </article>
+    <article class="card list-card">
+      <h3>⚙️ Описываете правила</h3>
+      <p>Типы страниц, маршруты, фильтры, связи — через <code>rules.yaml</code>.</p>
+    </article>
+    <article class="card list-card">
+      <h3>🧱 Notepub строит сайт</h3>
+      <p>Генерирует маршруты и рендерит чистый HTML.</p>
+    </article>
+  </div>
+</section>
+
+<section id="usecases">
+  <h2 class="section-title">Подходит для</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <h3>🪴 SEO блоги и digital gardens</h3>
+      <p>С плоскими URL и без JS.</p>
+    </div>
+    <div class="card">
+      <h3>📚 Документация и базы знаний</h3>
+      <p>Категории, связи, иерархии в Markdown.</p>
+    </div>
+    <div class="card">
+      <h3>🎓 Курсы и учебные материалы</h3>
+      <p>Модули, уроки, доступ по правилам.</p>
+    </div>
+    <div class="card">
+      <h3>🛍️ Продуктовые лендинги и каталоги</h3>
+      <p>Без CMS и костылей.</p>
+    </div>
+    <div class="card">
+      <h3>🧠 Личные знания (Obsidian/Notion)</h3>
+      <p>Прямой экспорт в сайт.</p>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <h2 class="section-title">Установка и запуск</h2>
+  <p class="lead">
+    Notepub можно запускать разными способами — от полного контроля до “скачал и запустил”.
+  </p>
+  <div class="tabs" data-tabs>
+    <div class="tab-buttons" role="tablist" aria-label="Способы запуска">
+      <button class="tab-button is-active" type="button" role="tab" aria-selected="true" data-tab="tab-source">
+        🧠 From source
+      </button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="tab-ci">
+        🔁 CI / GitHub Actions
+      </button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="tab-server">
+        🌐 Server / self-hosted
+      </button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="tab-binary">
+        📦 Binary release
+      </button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="tab-template">
+        🧱 Site template
+      </button>
+      <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="tab-hosted">
+        ☁️ Hosted / managed
+      </button>
+    </div>
+    <div class="tab-panels">
+      <div class="tab-panel is-active" id="tab-source" role="tabpanel">
+        <div class="card">
+          <h3>🧠 From source</h3>
+          <p class="lead">Максимальный контроль и прозрачность.</p>
+          <div class="code"><span class="muted">$</span> git clone github.com/cookiespooky/notepub && go build && ./notepub serve</div>
+          <ul>
+            <li>open-source движок</li>
+            <li>полный контроль над логикой</li>
+            <li><strong>Go писать не нужно</strong> — работаете с Markdown, правилами и шаблонами</li>
+          </ul>
+          <p class="lead">Подходит для: разработчиков, SEO-команд, тех, кто хочет понять, как всё устроено.</p>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-ci" role="tabpanel">
+        <div class="card">
+          <h3>🔁 CI / GitHub Actions</h3>
+          <p class="lead">Автоматическая сборка сайта.</p>
+          <div class="code"><span class="muted">$</span> git push origin main</div>
+          <ul>
+            <li>сборка сайта в CI</li>
+            <li>результат — чистый HTML</li>
+            <li>деплой на GitHub Pages, S3 или любой хостинг</li>
+          </ul>
+          <p class="lead">Подходит для: SEO-проектов, документации, публичных сайтов.</p>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-server" role="tabpanel">
+        <div class="card">
+          <h3>🌐 Server / self-hosted</h3>
+          <p class="lead">Серверный рендер и интеграции.</p>
+          <div class="code"><span class="muted">$</span> notepub index && notepub serve</div>
+          <ul>
+            <li>рендер страниц на лету</li>
+            <li>контроль кеша и маршрутов</li>
+            <li>self-hosted запуск</li>
+          </ul>
+          <p class="lead">Подходит для: сложных структур, сайтов с логикой, собственного сервера.</p>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-binary" role="tabpanel">
+        <div class="card">
+          <h3>📦 Binary release</h3>
+          <p class="lead">Один файл — один сайт.</p>
+          <div class="code"><span class="muted">$</span> notepub serve</div>
+          <ul>
+            <li>без <code>git clone</code></li>
+            <li>без Go и сборки</li>
+            <li>быстрый запуск</li>
+          </ul>
+          <p class="lead">Подходит для: локального запуска, CI, простого деплоя.</p>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-template" role="tabpanel">
+        <div class="card">
+          <h3>🧱 Site template</h3>
+          <p class="lead">Только контент и правила.</p>
+          <ul>
+            <li>готовая структура сайта</li>
+            <li>Markdown + <code>rules.yaml</code></li>
+            <li>CI настроен из коробки</li>
+          </ul>
+          <p class="lead">Подходит для: авторов, контентных команд, быстрых запусков.</p>
+        </div>
+      </div>
+      <div class="tab-panel" id="tab-hosted" role="tabpanel">
+        <div class="card">
+          <h3>☁️ Hosted / managed</h3>
+          <p class="lead">Минимум инфраструктуры.</p>
+          <ul>
+            <li>управляемый запуск</li>
+            <li>обновления и бэкапы</li>
+            <li>платные удобства</li>
+          </ul>
+          <p class="lead">Контент остаётся вашим, формат остаётся открытым, можно уйти в любой момент.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="help">
+  <h2 class="section-title">Поможем запустить Notepub быстрее</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <ul>
+        <li>Настроим структуру под ваш кейс</li>
+        <li>Подключим шаблоны и темы</li>
+        <li>Реализуем интеграции (формы, платежи, CRM)</li>
+        <li>Возьмём поддержку и кастомизацию</li>
+      </ul>
+    </div>
+    <!--<div class="card soft">
+      <h3>Notepub</h3>
+      <p>просто Markdown → умный сайт</p>
+    </div>-->
+  </div>
+</section>
+
+<script>
+  (function () {
+    var root = document.querySelector('[data-tabs]');
+    if (!root) return;
+    var buttons = root.querySelectorAll('.tab-button');
+    var panels = root.querySelectorAll('.tab-panel');
+    function activate(id) {
+      buttons.forEach(function (btn) {
+        var isActive = btn.getAttribute('data-tab') === id;
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      panels.forEach(function (panel) {
+        panel.classList.toggle('is-active', panel.id === id);
+      });
+    }
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        activate(btn.getAttribute('data-tab'));
+      });
+    });
+  })();
+</script>

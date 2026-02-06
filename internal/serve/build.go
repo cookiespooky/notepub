@@ -18,6 +18,7 @@ import (
 	"github.com/cookiespooky/notepub/internal/config"
 	"github.com/cookiespooky/notepub/internal/indexer"
 	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
@@ -140,7 +141,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 			return fmt.Errorf("render markdown %s: %w", route.S3Key, err)
 		}
 
-		meta = normalizeMetaMediaURLs(meta, cfg.Site.MediaBaseURL)
+		meta = normalizeMetaMediaURLs(meta, cfg.Site.MediaBaseURL, cfg.Site.BaseURL)
 		data := buildPageData(meta, rendered, cfg.Site.BaseURL)
 		data.Template = templateForType(meta.Type, rulesCfg)
 		data.Page.NoIndex = route.NoIndex
@@ -369,27 +370,12 @@ func renderMarkdownForBuild(markdown, baseKey, prefix, mediaBase string, wikiMap
 	return buf.String(), nil
 }
 
-func normalizeMetaMediaURLs(meta models.MetaEntry, mediaBase string) models.MetaEntry {
-	if mediaBase == "" {
-		return meta
-	}
-	base := strings.TrimRight(mediaBase, "/")
+func normalizeMetaMediaURLs(meta models.MetaEntry, mediaBase, baseURL string) models.MetaEntry {
 	update := func(v string) string {
-		if v == "" || isExternal(v) {
+		if v == "" {
 			return v
 		}
-		if strings.HasPrefix(v, "/media/") {
-			key := strings.TrimPrefix(v, "/media/")
-			key = strings.TrimPrefix(key, "/")
-			if key == "" {
-				return v
-			}
-			return base + "/" + escapePath(key)
-		}
-		if strings.HasPrefix(v, "/") {
-			return v
-		}
-		return base + "/" + escapePath(strings.TrimPrefix(v, "/"))
+		return mediautil.ResolveMediaAbsolute(v, "", "", mediaBase, baseURL)
 	}
 	meta.Image = update(meta.Image)
 	if meta.OpenGraph != nil {

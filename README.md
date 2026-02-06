@@ -14,9 +14,10 @@ Single-binary self-hosted publishing engine for Obsidian notes stored in your S3
 - `notepub serve` reads `resolve.json` from disk (in-memory cache, reload on mtime), renders markdown from S3, and serves HTML.
 - `notepub build` renders markdown from S3 to static HTML in `dist/` (GitHub Pages-friendly).
 - Theme assets are served from `/assets/*` (theme directory). Fallback embedded theme if not found.
-- Wiki-links (`[[...]]`) are rewritten to standard links at render time using `resolve.json` (title + filename lookup).
+- Wiki-links (`[[...]]`) are rewritten to standard links at render time using `resolve.json` (Obsidian-like wikimap: filename basename → aliases → title, then fallback to slug/path).
 - Obsidian image embeds `![[...]]` are rewritten to `/media/*` and served via S3 presign redirect.
 - `/media/*` only serves media keys referenced by indexed markdown by default; set `media.expose_all_under_prefix: true` to allow all media under the prefix.
+- JSON-LD frontmatter (`jsonld`) is injected as raw JSON when valid.
 
 ## Paths
 
@@ -43,7 +44,7 @@ Artifacts:
 
 ## Config
 
-Copy `config.example.yaml` to `./config.yaml` in the repo root and edit.
+Use `config.example.yaml` as a reference. A runnable dev sandbox lives in `examples/dev-sandbox/`.
 
 Config sources (priority):
 1) CLI flags (`--config`, `--rules`)
@@ -52,7 +53,7 @@ Config sources (priority):
 
 Required fields:
 - `site.base_url`
-- `site.media_base_url` (optional, used by build for absolute media URLs)
+- `site.media_base_url` (optional, used by serve + build for absolute media URLs)
 - `s3.bucket` (credentials depend on mode)
 
 Listen address comes from `server.listen` in config (default `:8081`).
@@ -70,16 +71,21 @@ Notes:
 - `site.base_url` may include a non-root path (e.g., `https://user.github.io/repo/`).
 - Environment variables do not override values inside `config.yaml`.
 
-## GitHub Pages deploy
+## Binary releases (CI-friendly)
 
-This repo is set up to deploy the static site from `dist/` on every push to `main`.
+Releases publish prebuilt binaries for Linux:
 
-Steps:
-1) Ensure `site.base_url` matches your Pages URL, e.g. `https://cookiespooky.github.io/notepub/`.
-2) Commit the built site in `dist/` (the workflow uploads it as-is).
-3) In GitHub, set Pages → Source = GitHub Actions.
+```bash
+NOTEPUB_VERSION=v0.1.0
+curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_linux_amd64
+chmod +x notepub
+./notepub validate --config ./config.yaml --rules ./rules.yaml
+./notepub build --config ./config.yaml --rules ./rules.yaml --dist ./dist
+```
 
-The workflow is in `.github/workflows/deploy.yml` and expects the site to already exist in `dist/`.
+## Examples
+
+A runnable dev sandbox (theme + content + rules/config + deploy workflow) lives in `examples/dev-sandbox/`.
 
 ## Rules (universal engine)
 
@@ -87,8 +93,9 @@ The workflow is in `.github/workflows/deploy.yml` and expects the site to alread
 
 Key ideas:
 - core fields: `type`, `slug`, `title`, `description`
-- mapping/derivation order comes from `fields` + `derive`
+- mapping/derivation order comes from `fields` (derive is planned, not implemented yet)
 - `types` maps content type → template + permalink
+- `resolve_by: "wikimap"` uses Obsidian-like keys (basename → aliases → title) and errors on collisions.
 
 Minimal example:
 ```
@@ -98,10 +105,6 @@ fields:
   slug: "slug"
   title: "title"
   description: "description"
-derive:
-  slug: ["slug", "filename"]
-  title: ["title", "h1", "filename"]
-  description: ["description", "excerpt"]
 types:
   page:
     template: "page.html"
@@ -201,7 +204,7 @@ Static index format (`/search.json`):
 {
   "generated_at": "RFC3339",
   "items": [
-    { "title": "...", "path": "/...", "snippet": "...", "type": "page", "updatedAt": "RFC3339" }
+    { "title": "...", "path": "/...", "snippet": "...", "type": "page", "updatedAt": "RFC3339", "score": 1.25 }
   ]
 }
 ```

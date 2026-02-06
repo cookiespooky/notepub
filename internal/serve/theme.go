@@ -77,7 +77,7 @@ type CoreFields struct {
 type MetaData struct {
 	Robots    string
 	OpenGraph []MetaKV
-	JSONLD    string
+	JSONLD    template.JS
 }
 
 type MetaKV struct {

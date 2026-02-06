@@ -16,6 +16,7 @@ import (
 
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
+	"github.com/cookiespooky/notepub/internal/wikilink"
 )
 
 type ResolveStore struct {
@@ -113,7 +114,9 @@ func (s *ResolveStore) Search(query string, limit int, cursor string) ([]SearchI
 		if score <= 0 {
 			continue
 		}
-		results = append(results, scoredItem{SearchItem: doc.toItem(), score: score})
+		item := doc.toItem()
+		item.Score = score
+		results = append(results, scoredItem{SearchItem: item, score: score})
 	}
 	sort.SliceStable(results, func(i, j int) bool {
 		if results[i].score == results[j].score {
@@ -221,12 +224,17 @@ func (s *ResolveStore) cachedSearchOrError(err error) (models.ResolveIndex, []se
 func buildWikiMap(idx models.ResolveIndex) map[string]string {
 	out := map[string]string{}
 	for pathVal, meta := range idx.Meta {
-		addWikiKey(out, meta.Title, pathVal)
-		addWikiKey(out, meta.Slug, pathVal)
 		route, ok := idx.Routes[pathVal]
 		if ok && route.S3Key != "" {
 			name := filenameBase(route.S3Key)
 			addWikiKey(out, name, pathVal)
+		}
+		for _, alias := range extractAliases(meta.FM) {
+			addWikiKey(out, alias, pathVal)
+		}
+		addWikiKey(out, meta.Title, pathVal)
+		addWikiKey(out, meta.Slug, pathVal)
+		if ok && route.S3Key != "" {
 			if rel := normalizePathKey(route.S3Key); rel != "" {
 				addWikiKey(out, rel, pathVal)
 			}
@@ -380,9 +388,36 @@ func addWikiKey(m map[string]string, key, pathVal string) {
 }
 
 func normalizeWikiKey(val string) string {
-	val = strings.TrimSpace(val)
-	val = strings.ToLower(val)
-	return val
+	return wikilink.NormalizeKey(val)
+}
+
+func extractAliases(meta map[string]interface{}) []string {
+	if meta == nil {
+		return nil
+	}
+	val, ok := meta["aliases"]
+	if !ok {
+		return nil
+	}
+	switch v := val.(type) {
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		return []string{v}
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func filenameBase(key string) string {

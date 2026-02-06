@@ -25,10 +25,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cookiespooky/notepub/internal/config"
 	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
 	"github.com/cookiespooky/notepub/internal/urlutil"
+	"github.com/cookiespooky/notepub/internal/wikilink"
 )
 
 const (
@@ -470,12 +472,12 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 	imageAlt := ""
 	fmImage := stringFromMeta(meta, "og_image")
 	if fmImage != "" {
-		imageURL = resolveImageURLFromHref(fmImage, s3Key, prefix, site.BaseURL)
+		imageURL = resolveImageURLFromHref(fmImage, s3Key, prefix, site.MediaBaseURL, site.BaseURL)
 	} else if len(content) > 0 {
-		imageURL, imageAlt = resolveImageURLFromContentWithAlt(string(content), s3Key, prefix, site.BaseURL)
+		imageURL, imageAlt = resolveImageURLFromContentWithAlt(string(content), s3Key, prefix, site.MediaBaseURL, site.BaseURL)
 	}
 	if imageURL == "" && site.DefaultOGImage != "" {
-		imageURL = resolveImageURLFromHref(site.DefaultOGImage, s3Key, prefix, site.BaseURL)
+		imageURL = resolveImageURLFromHref(site.DefaultOGImage, s3Key, prefix, site.MediaBaseURL, site.BaseURL)
 	}
 
 	setDefaultOG(og, "title", ogTitle)
@@ -640,6 +642,7 @@ type resolverIndex struct {
 	bySlug          map[string]string
 	bySlugLower     map[string]string
 	typeByPath      map[string]string
+	byWiki          map[string]string
 }
 
 func extractRawLinkTargets(meta map[string]interface{}, content []byte, cfg rules.Rules) map[string][]string {
@@ -695,12 +698,14 @@ func parseLinkValue(raw string, syntax string) string {
 		syntax = "plain"
 	}
 	if syntax == "auto" && looksLikeWikiLink(raw) {
-		return normalizeTarget(raw)
+		raw = strings.TrimSuffix(strings.TrimPrefix(raw, "[["), "]]")
+		return strings.TrimSpace(raw)
 	}
 	if syntax == "wikilink" {
-		return normalizeTarget(raw)
+		raw = strings.TrimSuffix(strings.TrimPrefix(raw, "[["), "]]")
+		return strings.TrimSpace(raw)
 	}
-	return normalizeTarget(raw)
+	return raw
 }
 
 func looksLikeWikiLink(raw string) bool {
@@ -713,8 +718,12 @@ func extractWikiTargets(content []byte) []string {
 	matches := wikiLinkRe.FindAllString(text, -1)
 	out := make([]string, 0, len(matches))
 	for _, match := range matches {
-		if target := normalizeTarget(match); target != "" {
-			out = append(out, target)
+		raw := strings.TrimSpace(match)
+		raw = strings.TrimPrefix(raw, "[[")
+		raw = strings.TrimSuffix(raw, "]]")
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			out = append(out, raw)
 		}
 	}
 	return out
@@ -749,7 +758,10 @@ func normalizeTarget(raw string) string {
 func resolveLinks(idx models.ResolveIndex, cfg rules.Rules, prefix string) (map[string]map[string][]string, error) {
 	out := map[string]map[string][]string{}
 	errors := []string{}
-	resolver := buildResolverIndex(idx, prefix)
+	resolver, err := buildResolverIndex(idx, prefix)
+	if err != nil {
+		return out, err
+	}
 	for pathVal, meta := range idx.Meta {
 		rawTargets := idx.LinkTargets[pathVal]
 		if rawTargets == nil {
@@ -764,7 +776,7 @@ func resolveLinks(idx models.ResolveIndex, cfg rules.Rules, prefix string) (map[
 				continue
 			}
 			for _, target := range targets {
-				resolved, err := resolveTarget(target, rule.Resolve, resolver)
+				resolved, _, err := ResolveLink(target, rule.ResolveBy, rule.Resolve, resolver)
 				if err != nil {
 					if shouldErrorOnResolve(err, rule.Resolve) {
 						errors = append(errors, fmt.Sprintf("%s: %s", pathVal, err.Error()))
@@ -799,7 +811,7 @@ func resolveLinks(idx models.ResolveIndex, cfg rules.Rules, prefix string) (map[
 	return out, nil
 }
 
-func buildResolverIndex(idx models.ResolveIndex, prefix string) resolverIndex {
+func buildResolverIndex(idx models.ResolveIndex, prefix string) (resolverIndex, error) {
 	res := resolverIndex{
 		byPath:          map[string]string{},
 		byPathLower:     map[string]string{},
@@ -808,7 +820,9 @@ func buildResolverIndex(idx models.ResolveIndex, prefix string) resolverIndex {
 		bySlug:          map[string]string{},
 		bySlugLower:     map[string]string{},
 		typeByPath:      map[string]string{},
+		byWiki:          map[string]string{},
 	}
+	wikiErrors := []string{}
 	for pathVal, route := range idx.Routes {
 		meta, ok := idx.Meta[pathVal]
 		if !ok {
@@ -826,10 +840,29 @@ func buildResolverIndex(idx models.ResolveIndex, prefix string) resolverIndex {
 			name := filenameBase(route.S3Key)
 			if name != "" {
 				addResolveListKey(res.byFilename, res.byFilenameLower, name, pathVal)
+				if err := addWikiKey(res.byWiki, name, pathVal); err != nil {
+					wikiErrors = append(wikiErrors, err.Error())
+				}
+			}
+		}
+		for _, alias := range extractAliases(meta.FM) {
+			if err := addWikiKey(res.byWiki, alias, pathVal); err != nil {
+				wikiErrors = append(wikiErrors, err.Error())
+			}
+		}
+		if meta.Title != "" {
+			if err := addWikiKey(res.byWiki, meta.Title, pathVal); err != nil {
+				wikiErrors = append(wikiErrors, err.Error())
 			}
 		}
 	}
-	return res
+	if len(wikiErrors) > 0 {
+		for _, msg := range wikiErrors {
+			log.Printf("wikimap collision: %s", msg)
+		}
+		return res, fmt.Errorf("wikimap collisions (%d)", len(wikiErrors))
+	}
+	return res, nil
 }
 
 func addResolveKey(rawMap, lowerMap map[string]string, key, pathVal string) {
@@ -854,12 +887,78 @@ func addResolveListKey(rawMap, lowerMap map[string][]string, key, pathVal string
 	lowerMap[lowerKey] = append(lowerMap[lowerKey], pathVal)
 }
 
+func addWikiKey(m map[string]string, key, pathVal string) error {
+	norm := normalizeWikiKey(key)
+	if norm == "" {
+		return nil
+	}
+	if existing, ok := m[norm]; ok && existing != pathVal {
+		return fmt.Errorf("%q -> %s (existing %s)", key, pathVal, existing)
+	}
+	m[norm] = pathVal
+	return nil
+}
+
+func extractAliases(meta map[string]interface{}) []string {
+	if meta == nil {
+		return nil
+	}
+	val, ok := meta["aliases"]
+	if !ok {
+		return nil
+	}
+	switch v := val.(type) {
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		return []string{v}
+	case []string:
+		return v
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func normalizeWikiKey(val string) string {
+	return wikilink.NormalizeKey(val)
+}
+
+func splitWikiTarget(raw string) (string, string) {
+	return wikilink.SplitTarget(raw)
+}
+
 func normalizePathKey(s3Key, prefix string) string {
 	key := strings.TrimPrefix(s3Key, prefix)
 	key = strings.TrimPrefix(key, "/")
 	key = strings.TrimSuffix(key, ".md")
 	key = strings.TrimSuffix(key, ".markdown")
 	return strings.TrimSpace(key)
+}
+
+// ResolveLink resolves a target using the requested resolveBy mode and rule order.
+// It returns the resolved path and any trailing anchor ("#...") from the target.
+func ResolveLink(target string, resolveBy string, rule rules.ResolveRule, res resolverIndex) (string, string, error) {
+	baseTarget, tail := splitWikiTarget(target)
+	if strings.EqualFold(strings.TrimSpace(resolveBy), "wikimap") {
+		if key := normalizeWikiKey(baseTarget); key != "" {
+			if resolved, ok := res.byWiki[key]; ok {
+				return resolved, tail, nil
+			}
+		}
+		resolved, err := resolveTarget(baseTarget, rule, res)
+		return resolved, tail, err
+	}
+	resolved, err := resolveTarget(baseTarget, rule, res)
+	return resolved, tail, err
 }
 
 func resolveTarget(target string, rule rules.ResolveRule, res resolverIndex) (string, error) {
@@ -950,17 +1049,17 @@ func typeAllowed(value string, allowed []string) bool {
 	return false
 }
 
-func resolveImageURLFromContent(markdown, s3Key, prefix, baseURL string) string {
-	url, _ := resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, baseURL)
+func resolveImageURLFromContent(markdown, s3Key, prefix, mediaBase, baseURL string) string {
+	url, _ := resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL)
 	return url
 }
 
-func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, baseURL string) (string, string) {
+func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL string) (string, string) {
 	href, alt := extractFirstImageWithAlt(markdown)
 	if href == "" {
 		return "", ""
 	}
-	url := resolveImageURLFromHref(href, s3Key, prefix, baseURL)
+	url := resolveImageURLFromHref(href, s3Key, prefix, mediaBase, baseURL)
 	return url, alt
 }
 
@@ -993,31 +1092,8 @@ func parseEmbedTarget(inner string) (string, string) {
 	return target, candidate
 }
 
-func resolveImageURLFromHref(href, s3Key, prefix, baseURL string) string {
-	href = strings.TrimSpace(href)
-	if href == "" {
-		return ""
-	}
-	if isExternalURL(href) {
-		return href
-	}
-	if strings.HasPrefix(href, "/") {
-		return strings.TrimRight(baseURL, "/") + href
-	}
-	key := href
-	if prefix != "" && strings.HasPrefix(key, prefix) {
-		// already a full key
-	} else {
-		baseDir := path.Dir(strings.TrimPrefix(s3Key, "/"))
-		if baseDir != "." && baseDir != "/" {
-			key = path.Join(baseDir, key)
-		}
-	}
-	key = strings.TrimPrefix(key, "/")
-	if key == "" {
-		return ""
-	}
-	return strings.TrimRight(baseURL, "/") + "/media/" + escapePath(key)
+func resolveImageURLFromHref(href, s3Key, prefix, mediaBase, baseURL string) string {
+	return mediautil.ResolveMediaAbsolute(href, s3Key, prefix, mediaBase, baseURL)
 }
 
 func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
@@ -1474,11 +1550,12 @@ type searchIndex struct {
 }
 
 type searchItem struct {
-	Title     string `json:"title,omitempty"`
-	Path      string `json:"path"`
-	Snippet   string `json:"snippet,omitempty"`
-	Type      string `json:"type,omitempty"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	Title     string  `json:"title,omitempty"`
+	Path      string  `json:"path"`
+	Snippet   string  `json:"snippet,omitempty"`
+	Type      string  `json:"type,omitempty"`
+	UpdatedAt string  `json:"updatedAt,omitempty"`
+	Score     float64 `json:"score"`
 }
 
 func writeSearchIndex(artifactsDir string, idx models.ResolveIndex, cfg rules.Rules) error {

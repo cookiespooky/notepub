@@ -207,6 +207,40 @@ collections:
         dir: "desc"
       item_limit: 50
 
+  blog_hubs:
+    kind: "backrefs"
+    materialize: false
+    link: "belongs_to"
+    to_slug: "blog"
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["hub"]
+    sort:
+      by: "fm.order"
+      dir: "asc"
+      nulls_last: true
+    limit: 200
+
+  blog_items_grouped:
+    kind: "filter"
+    materialize: false
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["essay"]
+    limit: 5000
+    group_by:
+      by: "fm.hub"
+      multi: false
+      group_sort:
+        dir: "asc"
+      item_sort:
+        by: "fm.order"
+        dir: "asc"
+        nulls_last: true
+      item_limit: 200
+
 # ------------------------------------------------------------
 # 4) Search / Sitemap
 # ------------------------------------------------------------
