@@ -50,19 +50,40 @@ notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --lin
 
 ## Release binaries
 
-GitHub Release publishes Linux binaries from `.github/workflows/release.yml`:
+GitHub Release publishes cross-platform binaries from `.github/workflows/release.yml`:
 
 - `notepub_linux_amd64`
 - `notepub_linux_arm64`
+- `notepub_darwin_amd64`
+- `notepub_darwin_arm64`
+- `notepub_windows_amd64.exe`
+- `checksums.txt`
 
-Usage example:
+Usage example (Linux amd64):
 
 ```bash
-NOTEPUB_VERSION=v0.1.0
+NOTEPUB_VERSION=v0.1.1
 curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_linux_amd64
 chmod +x notepub
 ./notepub validate --config ./config.yaml --rules ./rules.yaml
 ./notepub build --config ./config.yaml --rules ./rules.yaml --dist ./dist
+```
+
+macOS Apple Silicon:
+
+```bash
+NOTEPUB_VERSION=v0.1.1
+curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_darwin_arm64
+chmod +x notepub
+./notepub version
+```
+
+Windows PowerShell:
+
+```powershell
+$env:NOTEPUB_VERSION="v0.1.1"
+Invoke-WebRequest -Uri "https://github.com/cookiespooky/notepub/releases/download/$env:NOTEPUB_VERSION/notepub_windows_amd64.exe" -OutFile ".\notepub.exe"
+.\notepub.exe version
 ```
 
 ## Config and rules

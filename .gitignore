@@ -42,6 +42,7 @@ storage/
 uploads/
 var/
 .notepub/
+.notepub-*/
 dist/
 
 # ==========================
