@@ -22,9 +22,20 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/notepub_linux_amd64 ./cmd/notepub
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/notepub_linux_arm64 ./cmd/notepub
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/notepub_darwin_amd64 ./cmd/notepub
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/notepub_darwin_arm64 ./cmd/notepub
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/notepub_windows_amd64.exe ./cmd/notepub
+      - name: Generate checksums
+        run: |
+          cd dist
+          shasum -a 256 * > checksums.txt
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/notepub_linux_amd64
             dist/notepub_linux_arm64
+            dist/notepub_darwin_amd64
+            dist/notepub_darwin_arm64
+            dist/notepub_windows_amd64.exe
+            dist/checksums.txt
