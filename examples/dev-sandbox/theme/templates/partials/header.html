@@ -1,0 +1,12 @@
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="logo" href="{{ .BaseURL }}/">Notepub</a>
+    <nav class="nav">
+      <a href="{{ .BaseURL }}/about">About</a>
+      <a href="{{ .BaseURL }}/articles/first-article">Articles</a>
+      <a href="{{ .BaseURL }}/guides">Hub</a>
+      <a href="{{ .BaseURL }}/search">Search</a>
+    </nav>
+    {{ template "search_trigger.html" . }}
+  </div>
+</header>

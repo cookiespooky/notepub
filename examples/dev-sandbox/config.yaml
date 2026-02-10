@@ -1,6 +1,6 @@
 site:
   id: default
-  base_url: "https://cookiespooky.github.io/notepub/" # http://127.0.0.1:8080 for local
+  base_url: "http://127.0.0.1:8080" # http://127.0.0.1:8080 for local
   title: "Notepub"
   description: "Notepub: Markdown → умный сайт"
   default_og_image: ""
@@ -17,7 +17,7 @@ s3: # for content.source == "s3"
 
 content:
   source: "local"  # "s3" or "local"
-  local_dir: "./markdown" # in case of "local"
+  local_dir: "./content" # in case of "local"
 
 og_type_by_type:
   article: "article"
@@ -30,15 +30,15 @@ paths: # for serve mode indexed artifacts
   cache_root: ./.notepub/cache
 
 theme:
-  dir: /Users/antonlozkin/Documents/obsidian-website/themes
-  name: notepub
+  dir: .
+  name: "theme"
   templates_subdir: templates
   assets_subdir: assets
 
 server:
   listen: "127.0.0.1:8080" # http://127.0.0.1:8080
 
-rules_path: ./rules.yaml
+rules_path: ./examples/dev-sandbox/rules.yaml
 
 robots:
   disallow:

@@ -1,0 +1,25 @@
+<section class="page">
+  <p class="eyebrow">Search</p>
+  <h1>Search</h1>
+  <form class="search-form" action="{{ .BaseURL }}/search" method="get">
+    <input type="search" name="q" value="{{ .SearchQuery }}" placeholder="Search..." minlength="2" />
+    <button type="submit">Search</button>
+  </form>
+  <div class="search-results" data-search-results>
+    {{- if .SearchItems }}
+    <ul>
+      {{- range .SearchItems }}
+      <li>
+        <a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a>
+        {{- if .Snippet }}<p class="muted">{{ .Snippet }}</p>{{- end }}
+      </li>
+      {{- end }}
+    </ul>
+    {{- else }}
+    <p class="muted">Type at least 2 characters.</p>
+    {{- end }}
+  </div>
+  <noscript>
+    <p class="muted">JavaScript enhances search but is not required.</p>
+  </noscript>
+</section>

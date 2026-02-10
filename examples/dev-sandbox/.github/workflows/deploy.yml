@@ -27,19 +27,19 @@ jobs:
           cat > config.ci.yaml <<'EOF'
           site:
             id: default
-            base_url: "https://cookiespooky.github.io/notepub/"
+            base_url: "https://USERNAME.github.io/REPO/"
             host: 127.0.0.1
           content:
             source: "local"
-            local_dir: "./markdown"
+            local_dir: "./content"
           paths:
             file_root: ./.notepub
             artifacts_dir: ./.notepub/artifacts
             snapshot_file: ./.notepub/snapshot/objects.json
             cache_root: ./.notepub/cache
           theme:
-            dir: ./themes
-            name: notepub
+            dir: .
+            name: theme
             templates_subdir: templates
             assets_subdir: assets
           rules_path: ./rules.yaml

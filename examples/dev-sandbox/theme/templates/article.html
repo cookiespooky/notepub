@@ -1,0 +1,42 @@
+<article class="page">
+  <p class="eyebrow">Article</p>
+  <h1>{{ .Page.Title }}</h1>
+  {{- if .Page.Description }}
+  <p class="deck">{{ .Page.Description }}</p>
+  {{- end }}
+  <div class="meta-row">
+    {{- $tags := index .FM "tags" }}
+    {{- if $tags }}
+    <div class="tags">
+      {{- range $tags }}
+      <span class="tag">#{{ . }}</span>
+      {{- end }}
+    </div>
+    {{- end }}
+  </div>
+  <div class="prose">
+    {{ .Body }}
+  </div>
+
+  {{- if .Collections.related_items.Items }}
+  <div class="section">
+    <h2>Related</h2>
+    <ul>
+      {{- range .Collections.related_items.Items }}
+      <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+
+  {{- if .Collections.wiki_neighbors.Items }}
+  <div class="section">
+    <h2>Wikilinks</h2>
+    <ul>
+      {{- range .Collections.wiki_neighbors.Items }}
+      <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+</article>

@@ -267,6 +267,11 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 	data.SearchQuery = q
 	data.SearchItems = items
 	data.SearchNextCursor = nextCursor
+	resolveCtx, cancel := context.WithTimeout(r.Context(), resolveTimeout)
+	defer cancel()
+	if idx, _, err := s.store.GetWithWikiMapContext(resolveCtx); err == nil {
+		data.Collections = buildCollections(idx, s.rules, "/search")
+	}
 
 	rendered, err := s.theme.RenderPage(data)
 	if err != nil {
@@ -502,6 +507,7 @@ func (s *Server) writePageHeaders(w http.ResponseWriter, route models.RouteEntry
 
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
 	html, _ := s.theme.RenderNotFound(s.cfg.Site.BaseURL)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
 	w.Write([]byte(html))
 }

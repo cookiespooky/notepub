@@ -1,0 +1,19 @@
+<section class="page">
+  <p class="eyebrow">Hub</p>
+  <h1>{{ .Page.Title }}</h1>
+  {{- if .Page.Description }}
+  <p class="deck">{{ .Page.Description }}</p>
+  {{- end }}
+
+  {{- $items := .Collections.hub_items.Items }}
+  {{- if $items }}
+  <div class="section">
+    <h2>Items</h2>
+    <ul>
+      {{- range $items }}
+      <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+      {{- end }}
+    </ul>
+  </div>
+  {{- end }}
+</section>

@@ -1,79 +1,61 @@
-# Notepub (self-hosted MVP)
+# Notepub
 
-Single-binary self-hosted publishing engine for Obsidian notes stored in your S3 bucket.
-[https://cookiespooky.github.io/notepub](https://cookiespooky.github.io/notepub)
+Single-binary publishing engine for Markdown content from local folders or S3.
 
-## How it works
+## Repository purpose
 
-- `notepub index` lists S3, diffs `snapshot/objects.json`, and generates:
-  - `artifacts/resolve.json`
-  - `artifacts/search.json`
-  - `artifacts/sitemap-index.xml` + `artifacts/sitemap-0001.xml`...
-  - `artifacts/robots.txt`
-  - `artifacts/collections/*.json` (if enabled + materialized)
-- `notepub serve` reads `resolve.json` from disk (in-memory cache, reload on mtime), renders markdown from S3, and serves HTML.
-- `notepub build` renders markdown from S3 to static HTML in `dist/` (GitHub Pages-friendly).
-- Theme assets are served from `/assets/*` (theme directory). Fallback embedded theme if not found.
-- Wiki-links (`[[...]]`) are rewritten to standard links at render time using `resolve.json` (Obsidian-like wikimap: filename basename → aliases → title, then fallback to slug/path).
-- Obsidian image embeds `![[...]]` are rewritten to `/media/*` and served via S3 presign redirect.
-- `/media/*` only serves media keys referenced by indexed markdown by default; set `media.expose_all_under_prefix: true` to allow all media under the prefix.
-- JSON-LD frontmatter (`jsonld`) is injected as raw JSON when valid.
+This repository is the engine core and includes:
 
-## Paths
+- CLI (`cmd/notepub`)
+- indexing, validation, serving and static build pipelines
+- embedded fallback theme
+- runnable sandbox in `examples/dev-sandbox`
 
-Defaults:
-- `paths.file_root`: `/var/lib/notepub`
-- `paths.artifacts_dir`: `/var/lib/notepub/artifacts`
-- `paths.snapshot_file`: `/var/lib/notepub/snapshot/objects.json`
-- `paths.cache_root`: `/var/cache/notepub`
+## Quick smoke run
 
-Artifacts:
-```
-/var/lib/notepub/
-  artifacts/
-    resolve.json
-    search.json
-    sitemap-index.xml
-    sitemap-0001.xml ...
-    robots.txt
-    collections/
-      <name>.json
-  snapshot/
-    objects.json
+```bash
+go build -o notepub ./cmd/notepub
+./notepub validate --config ./examples/dev-sandbox/config.yaml --rules ./examples/dev-sandbox/rules.yaml
+./notepub index --config ./examples/dev-sandbox/config.yaml --rules ./examples/dev-sandbox/rules.yaml
+./notepub serve --config ./examples/dev-sandbox/config.yaml --rules ./examples/dev-sandbox/rules.yaml
 ```
 
-## Config
+Open `http://127.0.0.1:8080`.
 
-Use `config.example.yaml` as a reference. A runnable dev sandbox lives in `examples/dev-sandbox/`.
+## Build static output
 
-Config sources (priority):
-1) CLI flags (`--config`, `--rules`)
-2) env paths (`CONFIG_PATH`, `RULES_PATH`)
-3) files in repo root (`config.yaml`, `rules.yaml`)
+```bash
+./notepub build --config ./examples/dev-sandbox/config.yaml --rules ./examples/dev-sandbox/rules.yaml --dist ./dist
+```
 
-Required fields:
-- `site.base_url`
-- `site.media_base_url` (optional, used by serve + build for absolute media URLs)
-- `s3.bucket` (credentials depend on mode)
+## Commands
 
-Listen address comes from `server.listen` in config (default `:8081`).
+```bash
+notepub index
+notepub serve
+notepub build
+notepub validate
+notepub help
+notepub version
+```
 
-Notes:
-- `s3.prefix` is normalized to no leading slash and optional trailing slash.
-- `s3.region` and `s3.force_path_style` are supported.
-- If `s3.access_key`/`s3.secret_key` are omitted, the AWS default credential chain is used.
-- For public buckets, set `s3.anonymous: true` to disable signing.
-- `content.source` switches markdown source: `"s3"` or `"local"`. If `s3.bucket` is empty, local is used.
-- `content.local_dir` defaults to `./markdown` and is resolved relative to `config.yaml`.
-- OpenGraph defaults can be set via `site.title`, `site.description`, `site.default_og_image`, and `og_type_by_type`.
-- `rules_path` points to `rules.yaml` (defaults to `rules.yaml` next to `config.yaml`).
-- `site.media_base_url` if unset keeps existing absolute media URLs and falls back to `/media/*` links.
-- `site.base_url` may include a non-root path (e.g., `https://user.github.io/repo/`).
-- Environment variables do not override values inside `config.yaml`.
+Advanced usage:
 
-## Binary releases (CI-friendly)
+```bash
+notepub index --config /path/to/config.yaml --rules /path/to/rules.yaml
+notepub serve --config /path/to/config.yaml --rules /path/to/rules.yaml
+notepub build --config /path/to/config.yaml --rules /path/to/rules.yaml --dist ./dist
+notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --links
+```
 
-Releases publish prebuilt binaries for Linux:
+## Release binaries
+
+GitHub Release publishes Linux binaries from `.github/workflows/release.yml`:
+
+- `notepub_linux_amd64`
+- `notepub_linux_arm64`
+
+Usage example:
 
 ```bash
 NOTEPUB_VERSION=v0.1.0
@@ -83,162 +65,27 @@ chmod +x notepub
 ./notepub build --config ./config.yaml --rules ./rules.yaml --dist ./dist
 ```
 
-## Examples
+## Config and rules
 
-A runnable dev sandbox (theme + content + rules/config + deploy workflow) lives in `examples/dev-sandbox/`.
+- `config.example.yaml` is a runnable reference and points to `examples/dev-sandbox`.
+- `rules.example.yaml` is a generic reference.
+- runtime artifacts are stored under `paths.file_root` (default `/var/lib/notepub`).
 
-## Rules (universal engine)
+## Example project
 
-`rules.yaml` defines how notes are normalized and routed.
+`examples/dev-sandbox` contains:
 
-Key ideas:
-- core fields: `type`, `slug`, `title`, `description`
-- mapping/derivation order comes from `fields` (derive is planned, not implemented yet)
-- `types` maps content type → template + permalink
-- `resolve_by: "wikimap"` uses Obsidian-like keys (basename → aliases → title) and errors on collisions.
+- `content/` Markdown and media
+- `theme/` templates and assets
+- `rules.yaml` and `config.yaml`
+- sample Pages workflow for static deploy
 
-Minimal example:
-```
-version: 1
-fields:
-  type: "type"
-  slug: "slug"
-  title: "title"
-  description: "description"
-types:
-  page:
-    template: "page.html"
-    permalink: "/{{ slug }}/"
-  category:
-    template: "category.html"
-    permalink: "/category/{{ slug }}/"
-  home:
-    template: "home.html"
-    permalink: "/"
-defaults:
-  type: "page"
-  template: "page.html"
-  permalink: "/{{ slug }}/"
-```
+## Health and metrics
 
-Template data:
-- `.Page.Type` and `.Page.Slug` are available in all templates.
-- `.Template` selects the body template when a matching file exists.
-
-## Commands
-
-Index (CLI):
-```
-notepub index
-notepub index --config /path/to/config.yaml --rules /path/to/rules.yaml
-```
-
-Serve (HTTP):
-```
-notepub serve
-notepub serve --config /path/to/config.yaml --rules /path/to/rules.yaml
-```
-
-Build (static):
-```
-notepub build --dist ./dist
-notepub build --config /path/to/config.yaml --rules /path/to/rules.yaml --dist ./dist
-```
-
-Validate (config + rules, optional resolve.json, link checks):
-```
-notepub validate
-notepub validate --links
-notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --links
-```
-
-Help:
-```
-notepub help
-notepub help build
-```
-
-Version:
-```
-notepub version
-```
-
-Metrics & health:
 - `/health` returns `ok`
-- `/metrics` returns JSON counters (expvar)
+- `/metrics` exposes expvar counters
 
-Exit codes:
-- `0` success
-- `1` runtime/config/content errors (S3, parse, index/build, rules validation, etc.)
-- `2` usage errors (unknown flags, missing command/args)
-
-Error precedence:
-1) if `--rules` is provided, the file is validated before config load
-2) if config is missing, error is `config file not found: <path>`
-3) otherwise, rules are resolved via config/adjacent/cwd and validated
-
-Build notes:
-- Uses the same render pipeline as `serve`.
-- Defaults to `artifacts/` and `dist/` next to `rules.yaml` (override with `--artifacts` / `--dist`).
-- If `artifacts/resolve.json` is missing, `build` runs `index` automatically (unless `--no-index`).
-- Copies theme assets to `dist/assets`.
-- Copies `sitemap*.xml`, `robots.txt`, and `search.json` from `artifacts/` when present.
-- Generates minimal `sitemap.xml` and `robots.txt` if they are missing.
-- Redirects (301) are written as `dist/<from>/index.html` with meta refresh + canonical.
-- Relative media links are resolved via `site.media_base_url` when set.
-- Generates `dist/404.html` using the theme's `notfound.html` (or a plain "Not Found").
-
-## Search Mode Contract
-
-Notepub search is dual-mode by design and must keep `/v1/search` available.
-
-Principles:
-- Dual-mode search: themes should support server search (`/v1/search`) and static search (`/search.json`).
-- Static hosting (build): default to `search.json` because `/v1/search` does not exist.
-- Server mode (serve): default to `/v1/search`; static index may be absent.
-- Do not remove `/v1/search` or make search JS-only.
-- `/search` must render without JS (SSR results), JS adds autocomplete/enhanced results.
-
-Static index format (`/search.json`):
-```
-{
-  "generated_at": "RFC3339",
-  "items": [
-    { "title": "...", "path": "/...", "snippet": "...", "type": "page", "updatedAt": "RFC3339", "score": 1.25 }
-  ]
-}
-```
-
-## Local dev (macOS, no Docker)
-
-Local MinIO setup that matches `config.local.yaml`:
-
-1) Install MinIO (Homebrew):
-```
-brew install minio
-```
-
-2) Run MinIO with a data directory:
-```
-minio server /path/to/minio-data --address ":9000" --console-address ":9001"
-```
-
-3) Create the bucket expected by `config.local.yaml` (default: `local-bucket`):
-```
-brew install minio-mc
-mc alias set local http://localhost:9000 minioadmin minioadmin
-mc mb local/local-bucket
-```
-
-4) Run Notepub locally:
-```
-./notepub index --config ./config.local.yaml
-./notepub serve --config ./config.local.yaml
-```
-
-If your bucket name, credentials, or MinIO endpoint differ, update `config.local.yaml` accordingly.
-
-## CI / GitHub Actions
+## CI / GitHub Actions (advanced)
 
 Pass config paths via env and keep secrets in the config file (checked in or generated in CI):
 ```
@@ -258,20 +105,6 @@ s3:
   secret_key: "${S3_SECRET_KEY}"
 EOF
 ```
-
-## Systemd
-
-See `deploy/systemd/` for `notepub.service`, `notepub-index.service`, `notepub-index.timer`.
-
-Example `Environment=` entries (only if config is not in the repo root):
-```
-Environment=CONFIG_PATH=/etc/notepub/config.yaml
-Environment=RULES_PATH=/etc/notepub/rules.yaml
-```
-
-## Nginx
-
-Sample config in `deploy/nginx/notepub.conf`.
 
 ## Theme
 
@@ -301,3 +134,8 @@ the indexer writes `artifacts/collections/<name>.json` with `items` or `groups`.
 
 Use collections in templates via `data.Collections` (runtime) or precomputed JSON
 files for static consumption.
+
+
+## Contact
+
+Telegram: [cookiespooky](https://t.me/cookiespooky)

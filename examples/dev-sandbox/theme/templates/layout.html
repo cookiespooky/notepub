@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <link rel="stylesheet" href="{{ .AssetsBase }}/styles.css" />
+  {{- if .Page.Description }}
+  <meta name="description" content="{{ .Page.Description }}" />
+  {{- end }}
+  {{- if .Meta.Robots }}
+  <meta name="robots" content="{{ .Meta.Robots }}" />
+  {{- end }}
+  {{- if .Canonical }}
+  <link rel="canonical" href="{{ .Canonical }}" />
+  {{- end }}
+  {{- range .Meta.OpenGraph }}
+  <meta property="{{ .Key }}" content="{{ .Value }}" />
+  {{- end }}
+  {{- if .Meta.JSONLD }}
+  <script type="application/ld+json">{{ .Meta.JSONLD }}</script>
+  {{- end }}
+  <script>window.__notepubSearchMode = "{{ .SearchMode }}";</script>
+  <title>{{ .Title }}</title>
+</head>
+<body>
+  {{ template "header.html" . }}
+  <main class="container">
+    {{ .Body }}
+  </main>
+  {{ template "footer.html" . }}
+  <script src="{{ .AssetsBase }}/main.js"></script>
+</body>
+</html>

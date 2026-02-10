@@ -1,0 +1,60 @@
+<section class="hero">
+  <p class="eyebrow">Dev Sandbox</p>
+  <h1>{{ .Page.Title }}</h1>
+  {{- if .Page.Description }}
+  <p class="deck">{{ .Page.Description }}</p>
+  {{- end }}
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Hubs</h2>
+    {{- $hubs := .Collections.home_hubs.Items }}
+    {{- if $hubs }}
+    <ul>
+      {{- range $hubs }}
+      <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+      {{- end }}
+    </ul>
+    {{- else }}
+    <p class="muted">No hubs yet.</p>
+    {{- end }}
+  </div>
+  <div class="card">
+    <h2>Articles</h2>
+    {{- $articles := .Collections.home_articles.Items }}
+    {{- if $articles }}
+    <ul>
+      {{- range $articles }}
+      <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+      {{- end }}
+    </ul>
+    {{- else }}
+    <p class="muted">No articles yet.</p>
+    {{- end }}
+  </div>
+</section>
+
+
+<section class="card">
+  <h2>Articles by tag</h2>
+  {{- $groups := .Collections.articles_by_tag.Groups }}
+  {{- if $groups }}
+    {{- range $groups }}
+    <div class="section">
+      <h3>#{{ .Key }}</h3>
+      <ul>
+        {{- range .Items }}
+        <li><a href="{{ $.BaseURL }}{{ .Path }}">{{ .Title }}</a></li>
+        {{- end }}
+      </ul>
+    </div>
+    {{- end }}
+  {{- else }}
+    <p class="muted">No tags yet.</p>
+  {{- end }}
+</section>
+
+<section class="callout">
+  <p>Try the search button in the header. It uses JS for fast results and stays SEO-friendly.</p>
+</section>

@@ -14,6 +14,7 @@ import (
 )
 
 //go:embed embed/templates/*.html
+//go:embed embed/templates/partials/*.html
 //go:embed embed/assets/*
 var embeddedFS embed.FS
 

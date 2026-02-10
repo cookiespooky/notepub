@@ -1,0 +1,10 @@
+<article class="page">
+  <p class="eyebrow">Page</p>
+  <h1>{{ .Page.Title }}</h1>
+  {{- if .Page.Description }}
+  <p class="deck">{{ .Page.Description }}</p>
+  {{- end }}
+  <div class="prose">
+    {{ .Body }}
+  </div>
+</article>

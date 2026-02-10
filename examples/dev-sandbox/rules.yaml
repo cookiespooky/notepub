@@ -1,29 +1,30 @@
 version: 1
 
-# ------------------------------------------------------------
-# 0) Field contract: всё берётся из frontmatter (fm) напрямую
-# ------------------------------------------------------------
+# Minimal, feature-covering rules for the dev sandbox.
 fields:
   required: ["type", "slug", "title"]
-  optional: ["description", "draft", "hub", "related"]
+  optional:
+    - description
+    - draft
+    - hub
+    - related
+    - tags
+    - order
+    - redirect_to
+    - noindex
+    - jsonld
   defaults:
     draft: false
 
-# Optional: типизация fm.* для where/sort/group_by стабильности.
-# Если поле не указано — трактуем как string.
 fm_schema:
   order: number
-  price: number
-  weight: number
   tags: string[]
   hub: string
   related: string[]
   draft: boolean
+  noindex: boolean
 
-# ------------------------------------------------------------
-# 1) Types: type = fm.type, ничего не вычисляем
-# Home определяется через permalink: "/"
-# ------------------------------------------------------------
+# Types: keep it minimal and cover core page variants.
 types:
   home:
     template: "home.html"
@@ -31,28 +32,18 @@ types:
     include_in:
       sitemap: true
       search: false
-
   page:
     template: "page.html"
     permalink: "/{{ slug }}/"
     include_in:
       sitemap: true
       search: true
-
-  guide:
-    template: "guide.html"
-    permalink: "/docs/{{ slug }}/"
+  article:
+    template: "article.html"
+    permalink: "/articles/{{ slug }}/"
     include_in:
       sitemap: true
       search: true
-
-  essay:
-    template: "essay.html"
-    permalink: "/blog/{{ slug }}/"
-    include_in:
-      sitemap: true
-      search: true
-
   hub:
     template: "hub.html"
     permalink: "/{{ slug }}/"
@@ -60,14 +51,12 @@ types:
       sitemap: true
       search: false
 
-# ------------------------------------------------------------
-# 2) Links: универсальные правила построения edges
-# ------------------------------------------------------------
+# Links: hub relationships, explicit related, and wikilinks.
 links:
   - name: "belongs_to"
     kind: "field"
     field: "hub"
-    from_types: ["guide", "essay", "page", "hub"]
+    from_types: ["page", "article", "hub"]
     to_types: ["hub"]
     to: "slug"
     inverse: "contains"
@@ -81,8 +70,8 @@ links:
   - name: "related"
     kind: "field"
     field: "related"
-    from_types: ["guide", "essay", "page"]
-    to_types: ["guide", "essay", "page"]
+    from_types: ["page", "article"]
+    to_types: ["page", "article"]
     to: "slug"
     value_syntax: "auto"
     resolve:
@@ -93,18 +82,16 @@ links:
 
   - name: "wiki"
     kind: "wikilinks"
-    from_types: ["page", "guide", "essay", "hub"]
+    from_types: ["page", "article", "hub"]
     resolve_by: "wikimap"
-    to_types: ["page", "guide", "essay", "hub"]
+    to_types: ["page", "article", "hub"]
     resolve:
       order: ["path", "filename", "slug"]
       ambiguity: "error"
       missing: "warn_skip"
       case: "insensitive"
 
-# ------------------------------------------------------------
-# 3) Collections: declarative query layer
-# ------------------------------------------------------------
+# Collections: cover home lists, hub pages, tags, and related content.
 collections:
   home_hubs:
     kind: "filter"
@@ -117,7 +104,20 @@ collections:
       by: "title"
       dir: "asc"
       nulls_last: true
-    limit: 100
+    limit: 50
+
+  home_articles:
+    kind: "filter"
+    materialize: false
+    where:
+      all:
+        - fm_eq: { key: "draft", value: false }
+        - type_in: ["article"]
+    sort:
+      by: "fm.order"
+      dir: "asc"
+      nulls_last: true
+    limit: 50
 
   hub_items:
     kind: "backrefs"
@@ -127,14 +127,14 @@ collections:
     where:
       all:
         - fm_eq: { key: "draft", value: false }
-        - type_in: ["guide", "essay", "page", "hub"]
+        - type_in: ["page", "article", "hub"]
     sort:
-      by: "updated_at"
-      dir: "desc"
+      by: "title"
+      dir: "asc"
       nulls_last: true
-    limit: 50
+    limit: 100
 
-  related_pages:
+  related_items:
     kind: "forward"
     materialize: false
     link: "related"
@@ -156,41 +156,7 @@ collections:
     where:
       all:
         - fm_eq: { key: "draft", value: false }
-    limit: 30
-
-  docs_hubs:
-    kind: "backrefs"
-    materialize: false
-    link: "belongs_to"
-    to_slug: "docs"
-    where:
-      all:
-        - fm_eq: { key: "draft", value: false }
-        - type_in: ["hub"]
-    sort:
-      by: "fm.order"
-      dir: "asc"
-      nulls_last: true
-    limit: 200
-
-  docs_items_grouped:
-    kind: "filter"
-    materialize: false
-    where:
-      all:
-        - fm_eq: { key: "draft", value: false }
-        - type_in: ["guide", "essay"]
-    limit: 5000
-    group_by:
-      by: "fm.hub"
-      multi: false
-      group_sort:
-        dir: "asc"
-      item_sort:
-        by: "fm.order"
-        dir: "asc"
-        nulls_last: true
-      item_limit: 200
+    limit: 20
 
   articles_by_tag:
     kind: "filter"
@@ -198,46 +164,24 @@ collections:
     where:
       all:
         - fm_eq: { key: "draft", value: false }
-        - type_in: ["guide", "essay"]
-    limit: 5000
+        - type_in: ["article"]
+    limit: 500
     group_by:
       by: "fm.tags"
       multi: true
       group_sort:
         dir: "asc"
       item_sort:
-        by: "updated_at"
-        dir: "desc"
-      item_limit: 30
-
-  hub_items_grouped:
-    kind: "backrefs"
-    materialize: false
-    link: "belongs_to"
-    to_slug: "{{ page.slug }}"
-    where:
-      all:
-        - fm_eq: { key: "draft", value: false }
-    limit: 2000
-    group_by:
-      by: "type"
-      multi: false
-      group_sort:
+        by: "title"
         dir: "asc"
-      item_sort:
-        by: "updated_at"
-        dir: "desc"
-      item_limit: 50
+      item_limit: 20
 
-# ------------------------------------------------------------
-# 4) Search / Sitemap
-# ------------------------------------------------------------
 sitemap:
-  include_types: ["home", "page", "guide", "essay", "hub"]
+  include_types: ["home", "page", "article", "hub"]
   exclude_drafts: true
 
 search:
-  include_types: ["page", "guide", "essay"]
+  include_types: ["page", "article"]
   exclude_drafts: true
   fields_boost:
     title: 3
@@ -249,17 +193,11 @@ search:
     from: "description"
     max_len: 180
 
-# ------------------------------------------------------------
-# 5) Artifacts: материализация коллекций
-# ------------------------------------------------------------
 artifacts:
   collections:
     enabled: true
     dir: "collections"
 
-# ------------------------------------------------------------
-# 6) Validation
-# ------------------------------------------------------------
 validation:
   single_page_of_type:
     home: 1
