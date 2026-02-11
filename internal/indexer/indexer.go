@@ -17,7 +17,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -1598,7 +1597,7 @@ func acquireLock(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := tryLockFile(f); err != nil {
 		_ = f.Close()
 		return nil, fmt.Errorf("indexer lock busy: %w", err)
 	}
@@ -1609,7 +1608,7 @@ func releaseLock(f *os.File, path string) {
 	if f == nil {
 		return
 	}
-	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = unlockFile(f)
 	_ = f.Close()
 	_ = os.Remove(path)
 }
