@@ -132,6 +132,8 @@ content:
 }
 
 func TestLoadRuntimeAutoLocalListenChoosesDev(t *testing.T) {
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
 	cfgPath := writeTempConfig(t, `site:
   base_url: "https://prod.example.com/"
 runtime:
@@ -156,6 +158,7 @@ content:
 
 func TestLoadRuntimeAutoCIChoosesProd(t *testing.T) {
 	t.Setenv("CI", "true")
+	t.Setenv("GITHUB_ACTIONS", "true")
 	cfgPath := writeTempConfig(t, `site:
   base_url: "https://prod.example.com/"
 runtime:
