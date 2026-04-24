@@ -61,6 +61,54 @@ blockquote > p {
   margin: 0;
 }
 
+.callout {
+  margin: 20px 0;
+  padding: 12px 14px;
+  border: 1px solid #e3dccf;
+  border-left: 4px solid #c0592a;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.callout-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.callout-body {
+  color: #4b433a;
+}
+
+.obsidian-embed {
+  margin: 12px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed #d8cebf;
+  background: #fffaf3;
+}
+
+.obsidian-embed-label {
+  font-size: 0.85rem;
+  color: #7a6f63;
+  margin-right: 6px;
+}
+
+.math-inline {
+  font-family: "Source Code Pro", "Courier New", monospace;
+  background: #ece6da;
+  border-radius: 6px;
+  padding: 0 4px;
+}
+
+.math-block {
+  margin: 18px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #ece6da;
+  font-family: "Source Code Pro", "Courier New", monospace;
+  white-space: pre-wrap;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

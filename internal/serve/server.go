@@ -48,25 +48,27 @@ var (
 )
 
 type Server struct {
-	cfg      config.Config
-	store    *ResolveStore
-	cache    *HtmlCache
-	theme    *Theme
-	s3client *s3.Client
-	md       goldmark.Markdown
-	rules    rules.Rules
+	cfg        config.Config
+	store      *ResolveStore
+	cache      *HtmlCache
+	theme      *Theme
+	s3client   *s3.Client
+	md         goldmark.Markdown
+	rules      rules.Rules
+	htmlPolicy string
 }
 
 func New(cfg config.Config, store *ResolveStore, cache *HtmlCache, theme *Theme, s3client *s3.Client, rulesCfg rules.Rules) *Server {
 	md := newMarkdownRenderer()
 	return &Server{
-		cfg:      cfg,
-		store:    store,
-		cache:    cache,
-		theme:    theme,
-		s3client: s3client,
-		md:       md,
-		rules:    rulesCfg,
+		cfg:        cfg,
+		store:      store,
+		cache:      cache,
+		theme:      theme,
+		s3client:   s3client,
+		md:         md,
+		rules:      rulesCfg,
+		htmlPolicy: cfg.Markdown.HTMLPolicy,
 	}
 }
 
@@ -406,7 +408,9 @@ func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[str
 	if err := s.md.Convert([]byte(markdown), &buf); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	body := postprocessRenderedHTML(buf.String())
+	body, _ = applyHTMLPolicy(body, s.htmlPolicy)
+	return body, nil
 }
 
 func (s *Server) writePage(w http.ResponseWriter, pathVal string, idx models.ResolveIndex, route models.RouteEntry, body string, cacheStatus string, stale bool) {

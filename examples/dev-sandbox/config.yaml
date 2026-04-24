@@ -1,10 +1,17 @@
 site:
   id: default
-  base_url: "http://127.0.0.1:8080" # http://127.0.0.1:8080 for local
+  base_url: "https://example.com/docs/" # production fallback
   title: "Notepub"
   description: "Notepub: Markdown → умный сайт"
   default_og_image: ""
+  media_base_url: "https://example.com/docs/media/"
   host: 127.0.0.1
+
+runtime:
+  mode: "dev" # dev|prod
+  dev:
+    base_url: "http://127.0.0.1:8080/"
+    media_base_url: "http://127.0.0.1:8080/media/"
 
 s3: # for content.source == "s3"
   endpoint: "http://127.0.0.1:9000" # local minio s3
@@ -18,6 +25,10 @@ s3: # for content.source == "s3"
 content:
   source: "local"  # "s3" or "local"
   local_dir: "./content" # in case of "local"
+
+markdown:
+  # safe (default), unsafe, deny
+  html_policy: "safe"
 
 og_type_by_type:
   article: "article"

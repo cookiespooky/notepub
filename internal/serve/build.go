@@ -136,7 +136,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		if err != nil {
 			return fmt.Errorf("fetch %s: %w", route.S3Key, err)
 		}
-		rendered, err := renderMarkdownForBuild(string(body), route.S3Key, cfg.S3.Prefix, cfg.Site.MediaBaseURL, wikiMap, md)
+		rendered, err := renderMarkdownForBuild(string(body), route.S3Key, cfg.S3.Prefix, cfg.Site.MediaBaseURL, wikiMap, md, cfg.Markdown.HTMLPolicy)
 		if err != nil {
 			return fmt.Errorf("render markdown %s: %w", route.S3Key, err)
 		}
@@ -360,14 +360,16 @@ func writeSearchIndex(distDir string, idx models.ResolveIndex, rulesCfg rules.Ru
 	return writeFile(filepath.Join(distDir, "search.json"), b)
 }
 
-func renderMarkdownForBuild(markdown, baseKey, prefix, mediaBase string, wikiMap map[string]string, mdRenderer markdownRenderer) (string, error) {
+func renderMarkdownForBuild(markdown, baseKey, prefix, mediaBase string, wikiMap map[string]string, mdRenderer markdownRenderer, htmlPolicy string) (string, error) {
 	markdown = normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase)
 	markdown = normalizeMarkdownLinks(markdown, wikiMap)
 	var buf strings.Builder
 	if err := mdRenderer.Convert([]byte(markdown), &buf); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	body := postprocessRenderedHTML(buf.String())
+	body, _ = applyHTMLPolicy(body, htmlPolicy)
+	return body, nil
 }
 
 func normalizeMetaMediaURLs(meta models.MetaEntry, mediaBase, baseURL string) models.MetaEntry {

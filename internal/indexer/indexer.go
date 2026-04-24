@@ -23,7 +23,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cookiespooky/notepub/internal/config"
+	"github.com/cookiespooky/notepub/internal/linkutil"
 	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/mdproc"
 	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
@@ -661,6 +663,22 @@ func extractRawLinkTargets(meta map[string]interface{}, content []byte, cfg rule
 			for _, target := range extractWikiTargets(content) {
 				out[rule.Name] = append(out[rule.Name], target)
 			}
+		case "markdown_links":
+			for _, target := range extractMarkdownLinks(content) {
+				out[rule.Name] = append(out[rule.Name], target)
+			}
+		case "embeds":
+			for _, target := range extractEmbedTargets(content) {
+				out[rule.Name] = append(out[rule.Name], target)
+			}
+		case "tags":
+			for _, tag := range extractObsidianTags(content) {
+				out[rule.Name] = append(out[rule.Name], tag)
+			}
+		case "auto_links":
+			for _, target := range extractAutoLinks(content) {
+				out[rule.Name] = append(out[rule.Name], target)
+			}
 		}
 	}
 	return out
@@ -696,28 +714,39 @@ func parseLinkValue(raw string, syntax string) string {
 	if syntax == "" {
 		syntax = "plain"
 	}
-	if syntax == "auto" && looksLikeWikiLink(raw) {
-		raw = strings.TrimSuffix(strings.TrimPrefix(raw, "[["), "]]")
-		return strings.TrimSpace(raw)
+	if syntax == "auto" && linkutil.LooksLikeWikiLink(raw) {
+		return strings.TrimSpace(linkutil.UnwrapWikiLink(raw))
+	}
+	if syntax == "auto" {
+		if target := linkutil.ParseMarkdownLinkTarget(raw); target != "" {
+			return target
+		}
 	}
 	if syntax == "wikilink" {
-		raw = strings.TrimSuffix(strings.TrimPrefix(raw, "[["), "]]")
-		return strings.TrimSpace(raw)
+		return strings.TrimSpace(linkutil.UnwrapWikiLink(raw))
+	}
+	if syntax == "markdown_link" || syntax == "markdown_image" {
+		return linkutil.ParseMarkdownLinkTarget(raw)
 	}
 	return raw
 }
 
-func looksLikeWikiLink(raw string) bool {
-	raw = strings.TrimSpace(raw)
-	return strings.HasPrefix(raw, "[[") && strings.HasSuffix(raw, "]]")
-}
-
 func extractWikiTargets(content []byte) []string {
-	text := normalizeLineEndings(string(content))
-	matches := wikiLinkRe.FindAllString(text, -1)
+	text := mdproc.MaskCodeWithSpaces(string(content))
+	matches := wikiLinkRe.FindAllStringIndex(text, -1)
 	out := make([]string, 0, len(matches))
 	for _, match := range matches {
-		raw := strings.TrimSpace(match)
+		if len(match) < 2 {
+			continue
+		}
+		if match[0] > 0 && text[match[0]-1] == '!' {
+			rawTarget := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(text[match[0]:match[1]], "[["), "]]"))
+			target, _ := parseEmbedTarget(rawTarget)
+			if isMediaTarget(linkutil.StripWikiAnchor(target)) {
+				continue
+			}
+		}
+		raw := strings.TrimSpace(text[match[0]:match[1]])
 		raw = strings.TrimPrefix(raw, "[[")
 		raw = strings.TrimSuffix(raw, "]]")
 		raw = strings.TrimSpace(raw)
@@ -728,30 +757,157 @@ func extractWikiTargets(content []byte) []string {
 	return out
 }
 
+func extractMarkdownLinks(content []byte) []string {
+	text := mdproc.MaskCodeWithSpaces(string(content))
+	matches := markdownLinkCaptureRe.FindAllStringSubmatch(text, -1)
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		if len(m) < 3 {
+			continue
+		}
+		full := strings.TrimSpace(m[0])
+		if strings.HasPrefix(full, "![") {
+			continue
+		}
+		target := strings.TrimSpace(m[2])
+		if target == "" {
+			continue
+		}
+		target = stripMarkdownLinkTitle(target)
+		target = strings.Trim(target, "<>")
+		if target != "" {
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
+func extractEmbedTargets(content []byte) []string {
+	text := mdproc.MaskCodeWithSpaces(string(content))
+	out := make([]string, 0)
+	for _, m := range embedAnyRe.FindAllStringSubmatch(text, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		target, _ := parseEmbedTarget(m[1])
+		target = strings.TrimSpace(target)
+		if target != "" {
+			out = append(out, target)
+		}
+	}
+	for _, m := range mdImageRe.FindAllStringSubmatch(text, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		target := strings.TrimSpace(m[2])
+		if target == "" {
+			continue
+		}
+		target = stripMarkdownLinkTitle(target)
+		target = strings.Trim(target, "<>")
+		if target != "" {
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
+func extractAutoLinks(content []byte) []string {
+	text := mdproc.MaskCodeWithSpaces(string(content))
+	out := make([]string, 0)
+	for _, m := range autoURLRe.FindAllString(text, -1) {
+		u := strings.TrimSpace(m)
+		if u == "" {
+			continue
+		}
+		out = append(out, trimURLSuffix(u))
+	}
+	for _, m := range autoAngleURLRe.FindAllStringSubmatch(text, -1) {
+		if len(m) < 2 {
+			continue
+		}
+		u := strings.TrimSpace(m[1])
+		if u == "" {
+			continue
+		}
+		out = append(out, trimURLSuffix(u))
+	}
+	return out
+}
+
+func stripMarkdownLinkTitle(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return target
+	}
+	if strings.Contains(target, " ") {
+		parts := strings.Fields(target)
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+	return target
+}
+
+func trimURLSuffix(u string) string {
+	return strings.TrimRight(u, ".,;:!?)]}")
+}
+
+func extractObsidianTags(content []byte) []string {
+	text := mdproc.MaskCodeWithSpaces(string(content))
+	lines := strings.Split(text, "\n")
+	seen := map[string]struct{}{}
+	var out []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimmed, "# ") {
+			continue
+		}
+		for i := 0; i < len(line); i++ {
+			if line[i] != '#' {
+				continue
+			}
+			if i > 0 && isTagChar(line[i-1]) {
+				continue
+			}
+			j := i + 1
+			for j < len(line) && isTagChar(line[j]) {
+				j++
+			}
+			if j == i+1 {
+				continue
+			}
+			tag := strings.TrimSpace(line[i+1 : j])
+			if tag == "" {
+				continue
+			}
+			if _, ok := seen[tag]; ok {
+				continue
+			}
+			seen[tag] = struct{}{}
+			out = append(out, tag)
+			i = j - 1
+		}
+	}
+	return out
+}
+
+func isTagChar(b byte) bool {
+	if b >= 'a' && b <= 'z' {
+		return true
+	}
+	if b >= 'A' && b <= 'Z' {
+		return true
+	}
+	if b >= '0' && b <= '9' {
+		return true
+	}
+	return b == '_' || b == '-' || b == '/'
+}
+
 func normalizeTarget(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	if strings.HasPrefix(raw, "[[") && strings.HasSuffix(raw, "]]") {
-		raw = strings.TrimSuffix(strings.TrimPrefix(raw, "[["), "]]")
-		raw = strings.TrimSpace(raw)
-	}
-	if parts := strings.SplitN(raw, "|", 2); len(parts) > 0 {
-		raw = strings.TrimSpace(parts[0])
-	}
-	if parts := strings.SplitN(raw, "#", 2); len(parts) > 0 {
-		raw = strings.TrimSpace(parts[0])
-	}
-	if parts := strings.SplitN(raw, "^", 2); len(parts) > 0 {
-		raw = strings.TrimSpace(parts[0])
-	}
-	raw = strings.TrimPrefix(raw, "./")
-	raw = strings.TrimPrefix(raw, "/")
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimSuffix(raw, ".md")
-	raw = strings.TrimSuffix(raw, ".markdown")
-	return strings.TrimSpace(raw)
+	return linkutil.NormalizeTargetForResolve(raw)
 }
 
 func resolveLinks(idx models.ResolveIndex, cfg rules.Rules, prefix string) (map[string]map[string][]string, error) {
@@ -1063,13 +1219,27 @@ func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseU
 }
 
 func extractFirstImageWithAlt(markdown string) (string, string) {
-	markdown = normalizeLineEndings(markdown)
-	if m := embedImageRe.FindStringSubmatch(markdown); len(m) > 1 {
+	markdown = mdproc.MaskCodeWithSpaces(markdown)
+	for _, m := range embedImageRe.FindAllStringSubmatch(markdown, -1) {
+		if len(m) < 2 {
+			continue
+		}
 		target, alt := parseEmbedTarget(m[1])
+		target = linkutil.StripWikiAnchor(target)
+		if !isMediaTarget(target) {
+			continue
+		}
 		return target, alt
 	}
-	if m := mdImageRe.FindStringSubmatch(markdown); len(m) > 2 {
-		return strings.TrimSpace(m[2]), strings.TrimSpace(m[1])
+	for _, m := range mdImageRe.FindAllStringSubmatch(markdown, -1) {
+		if len(m) < 3 {
+			continue
+		}
+		target := strings.TrimSpace(m[2])
+		if !isMediaTarget(target) {
+			continue
+		}
+		return target, strings.TrimSpace(m[1])
 	}
 	return "", ""
 }
@@ -1096,7 +1266,7 @@ func resolveImageURLFromHref(href, s3Key, prefix, mediaBase, baseURL string) str
 }
 
 func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
-	markdown = normalizeLineEndings(markdown)
+	markdown = mdproc.MaskCodeWithSpaces(markdown)
 	keys := map[string]struct{}{}
 	addKey := func(key string) {
 		if key == "" {
@@ -1121,6 +1291,10 @@ func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
 			continue
 		}
 		target, _ := parseEmbedTarget(match[1])
+		target = linkutil.StripWikiAnchor(target)
+		if !isMediaTarget(target) {
+			continue
+		}
 		if key := resolveMediaKey(target, baseDir, prefix); key != "" {
 			addKey(key)
 		}
@@ -1130,6 +1304,9 @@ func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
 			continue
 		}
 		target := strings.TrimSpace(match[2])
+		if !isMediaTarget(target) {
+			continue
+		}
 		if key := resolveMediaKey(target, baseDir, prefix); key != "" {
 			addKey(key)
 		}
@@ -1185,7 +1362,24 @@ func escapePath(p string) string {
 }
 
 func normalizeLineEndings(markdown string) string {
-	return strings.ReplaceAll(markdown, "\r\n", "\n")
+	return mdproc.NormalizeLineEndings(markdown)
+}
+
+func isImageTarget(target string) bool {
+	return imagePathRe.MatchString(cleanMediaTarget(target))
+}
+
+func isMediaTarget(target string) bool {
+	clean := cleanMediaTarget(target)
+	return imagePathRe.MatchString(clean) || videoPathRe.MatchString(clean)
+}
+
+func cleanMediaTarget(target string) string {
+	lower := strings.ToLower(strings.TrimSpace(target))
+	if idx := strings.IndexAny(lower, "?#"); idx >= 0 {
+		lower = lower[:idx]
+	}
+	return lower
 }
 
 func excerptFromContent(content []byte, maxLen int) string {
@@ -1245,16 +1439,22 @@ func isExternalURL(href string) bool {
 }
 
 var (
-	embedImageRe     = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
-	mdImageRe        = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
-	wikiLinkRe       = regexp.MustCompile(`\[\[[^\]]+\]\]`)
-	mdLinkRe         = regexp.MustCompile(`\[(?s:.*?)\]\([^)]+\)`)
-	codeFenceRe      = regexp.MustCompile("(?s)```.*?```")
-	inlineCodeRe     = regexp.MustCompile("`[^`]*`")
-	htmlTagRe        = regexp.MustCompile(`</?[^>]+>`)
-	markdownSymbolRe = regexp.MustCompile(`(?m)^\s*[#>*\-+]+\s*`)
-	spaceRe          = regexp.MustCompile(`\s+`)
-	sizeRe           = regexp.MustCompile(`^\d+(x\d+)?$`)
+	markdownLinkCaptureRe = regexp.MustCompile(`!?\[([^\]]*)\]\(([^)]+)\)`)
+	embedAnyRe            = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
+	autoURLRe             = regexp.MustCompile(`(?i)\bhttps?://[^\s<>()]+`)
+	autoAngleURLRe        = regexp.MustCompile(`(?i)<(https?://[^>\s]+)>`)
+	embedImageRe          = regexp.MustCompile(`!\[\[([^\]]+)\]\]`)
+	mdImageRe             = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+	wikiLinkRe            = regexp.MustCompile(`\[\[[^\]]+\]\]`)
+	mdLinkRe              = regexp.MustCompile(`\[(?s:.*?)\]\([^)]+\)`)
+	codeFenceRe           = regexp.MustCompile("(?s)```.*?```")
+	inlineCodeRe          = regexp.MustCompile("`[^`]*`")
+	htmlTagRe             = regexp.MustCompile(`</?[^>]+>`)
+	markdownSymbolRe      = regexp.MustCompile(`(?m)^\s*[#>*\-+]+\s*`)
+	spaceRe               = regexp.MustCompile(`\s+`)
+	sizeRe                = regexp.MustCompile(`^\d+(x\d+)?$`)
+	imagePathRe           = regexp.MustCompile(`(?i)\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?|heic|heif)$`)
+	videoPathRe           = regexp.MustCompile(`(?i)\.(mp4|webm|ogv|mov|m4v)$`)
 )
 
 func buildRouteETag(routePath string, status int, redirectTo, s3Key, etag, lastModified, metaHash string) string {

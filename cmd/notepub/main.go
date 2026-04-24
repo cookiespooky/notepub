@@ -24,6 +24,7 @@ import (
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
 	"github.com/cookiespooky/notepub/internal/serve"
+	"github.com/cookiespooky/notepub/internal/templateupdate"
 )
 
 const (
@@ -31,10 +32,11 @@ const (
 	readTimeout       = 15 * time.Second
 	writeTimeout      = 15 * time.Second
 	idleTimeout       = 60 * time.Second
-	version           = "dev"
 )
 
 var ErrUsage = errors.New("usage error")
+
+var version = "dev"
 
 func main() {
 	code := run()
@@ -69,6 +71,8 @@ func run() int {
 		err = buildCmd(args)
 	case "validate":
 		err = validateCmd(args)
+	case "template":
+		err = templateCmd(args)
 	default:
 		err = usageError(fmt.Sprintf("unknown command: %s", cmd), usageWriter)
 	}
@@ -144,6 +148,15 @@ func serveCmd(args []string) error {
 		}
 		return fmt.Errorf("load config: %w", err)
 	}
+	if *addr != "" {
+		cfg.Server.Listen = *addr
+		cfg.Runtime.Dev.BaseURL = ""
+		cfg.Runtime.Dev.MediaBaseURL = ""
+		cfg.Site.MediaBaseURL = ""
+		if err := config.ApplyRuntimeURLs(&cfg); err != nil {
+			return fmt.Errorf("apply serve address: %w", err)
+		}
+	}
 	resolvedRules, err := resolveRulesPath(configPathResolved, cfg.RulesPath, *rulesPath)
 	if err != nil {
 		return err
@@ -157,7 +170,7 @@ func serveCmd(args []string) error {
 
 	resolvePath := filepath.Join(cfg.Paths.ArtifactsDir, "resolve.json")
 	store := serve.NewResolveStore(resolvePath, rulesCfg, cfg.Media.ExposeAllUnderPrefix)
-	cache := serve.NewHtmlCache(cfg.Paths.CacheRoot, cfg.Theme.Name)
+	cache := serve.NewHtmlCache(cfg.Paths.CacheRoot, cfg.Theme.Name, cfg.Site.BaseURL+"|"+cfg.Site.MediaBaseURL)
 	themeDir := filepath.Join(cfg.Theme.Dir, cfg.Theme.Name)
 	theme, err := serve.LoadTheme(themeDir, cfg.Theme.TemplatesSubdir, cfg.Theme.AssetsSubdir)
 	if err != nil {
@@ -188,9 +201,6 @@ func serveCmd(args []string) error {
 	defer stop()
 
 	listenAddr := cfg.Server.Listen
-	if *addr != "" {
-		listenAddr = *addr
-	}
 	server := &http.Server{
 		Addr:              listenAddr,
 		Handler:           srv.Router(),
@@ -275,7 +285,7 @@ func buildCmd(args []string) error {
 }
 
 func validateCmd(args []string) error {
-	fs, configPath, rulesPath, resolvePath, validateLinks := newValidateFlagSet()
+	fs, configPath, rulesPath, resolvePath, validateLinks, validateMarkdown, markdownStrict, markdownFormat, markdownOutput := newValidateFlagSet()
 	helped, err := parseFlags(fs, args, newValidateUsageWriter(fs))
 	if err != nil {
 		return err
@@ -328,11 +338,88 @@ func validateCmd(args []string) error {
 				return fmt.Errorf("link validation: %w", err)
 			}
 		}
+		if *validateMarkdown {
+			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer cancel()
+			diags, caps, err := indexer.ValidateMarkdownWithCapabilities(ctx, cfg, idx)
+			if err != nil {
+				return fmt.Errorf("markdown validation: %w", err)
+			}
+			format := normalizeMarkdownFormat(*markdownFormat)
+			if format == "" {
+				return fmt.Errorf("markdown validation: unsupported markdown format %q (use text or json)", *markdownFormat)
+			}
+			rendered, err := renderMarkdownDiagnostics(diags, caps, format)
+			if err != nil {
+				return fmt.Errorf("markdown validation output: %w", err)
+			}
+			if err := writeMarkdownDiagnostics(rendered, *markdownOutput); err != nil {
+				return fmt.Errorf("markdown validation output: %w", err)
+			}
+			errCount, warnCount := indexer.CountDiagnostics(diags)
+			log.Printf("markdown validation: %d error(s), %d warning(s)", errCount, warnCount)
+			if errCount > 0 {
+				return fmt.Errorf("markdown validation failed (%d errors)", errCount)
+			}
+			if *markdownStrict && warnCount > 0 {
+				return fmt.Errorf("markdown validation strict failed (%d warnings)", warnCount)
+			}
+		}
 	} else if *validateLinks {
 		return fmt.Errorf("link validation: resolve.json not found (use --resolve)")
+	} else if *validateMarkdown {
+		return fmt.Errorf("markdown validation: resolve.json not found (use --resolve or run index)")
 	}
 	log.Println("validate completed")
 	return nil
+}
+
+func templateCmd(args []string) error {
+	if len(args) == 0 {
+		return usageError("missing template subcommand", templateUsageWriter)
+	}
+	subcmd := args[0]
+	subargs := args[1:]
+	switch subcmd {
+	case "-h", "--help", "help":
+		templateUsageWriter(os.Stdout)
+		return nil
+	case "check":
+		fs, root := newTemplateCheckFlagSet()
+		helped, err := parseFlags(fs, subargs, newTemplateCheckUsageWriter(fs))
+		if err != nil {
+			return err
+		}
+		if helped {
+			return nil
+		}
+		report, err := templateupdate.Check(*root)
+		if err != nil {
+			return err
+		}
+		fmt.Print(report)
+		return nil
+	case "update":
+		fs, root, apply := newTemplateUpdateFlagSet()
+		helped, err := parseFlags(fs, subargs, newTemplateUpdateUsageWriter(fs))
+		if err != nil {
+			return err
+		}
+		if helped {
+			return nil
+		}
+		report, err := templateupdate.Update(templateupdate.UpdateOptions{
+			Root:  *root,
+			Apply: *apply,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Print(report)
+		return nil
+	default:
+		return usageError(fmt.Sprintf("unknown template subcommand: %s", subcmd), templateUsageWriter)
+	}
 }
 
 func validateResolve(path string) (models.ResolveIndex, error) {
@@ -371,6 +458,8 @@ func usageWriter(w io.Writer) {
 	fmt.Fprintln(w, "notepub serve --addr :8081")
 	fmt.Fprintln(w, "notepub build --dist ./dist")
 	fmt.Fprintln(w, "notepub validate")
+	fmt.Fprintln(w, "notepub template check")
+	fmt.Fprintln(w, "notepub template update --apply")
 	fmt.Fprintln(w, "notepub version")
 }
 
@@ -390,8 +479,10 @@ func helpCmd(args []string) {
 		fs, _, _, _, _, _, _ := newBuildFlagSet()
 		newBuildUsageWriter(fs)(os.Stdout)
 	case "validate":
-		fs, _, _, _, _ := newValidateFlagSet()
+		fs, _, _, _, _, _, _, _, _ := newValidateFlagSet()
 		newValidateUsageWriter(fs)(os.Stdout)
+	case "template":
+		templateUsageWriter(os.Stdout)
 	default:
 		usageWriter(os.Stdout)
 	}
@@ -427,13 +518,106 @@ func newBuildFlagSet() (*flag.FlagSet, *string, *string, *string, *string, *bool
 	return fs, configPath, rulesPath, distDir, artifactsDir, noIndex, generateSearch
 }
 
-func newValidateFlagSet() (*flag.FlagSet, *string, *string, *string, *bool) {
+func newValidateFlagSet() (*flag.FlagSet, *string, *string, *string, *bool, *bool, *bool, *string, *string) {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 	configPath := fs.String("config", "", "Path to config.yaml")
 	rulesPath := fs.String("rules", "", "Path to rules.yaml (overrides config)")
 	resolvePath := fs.String("resolve", "", "Path to resolve.json (optional)")
 	validateLinks := fs.Bool("links", false, "Validate links using resolve.json")
-	return fs, configPath, rulesPath, resolvePath, validateLinks
+	validateMarkdown := fs.Bool("markdown", false, "Validate markdown diagnostics (wikilinks/embeds/raw html)")
+	markdownStrict := fs.Bool("markdown-strict", false, "Fail on markdown warnings as well as errors")
+	markdownFormat := fs.String("markdown-format", "text", "Markdown diagnostics output format: text|json")
+	markdownOutput := fs.String("output", "", "Write markdown diagnostics output to file path")
+	return fs, configPath, rulesPath, resolvePath, validateLinks, validateMarkdown, markdownStrict, markdownFormat, markdownOutput
+}
+
+func newTemplateCheckFlagSet() (*flag.FlagSet, *string) {
+	fs := flag.NewFlagSet("template check", flag.ContinueOnError)
+	root := fs.String("root", ".", "Project root")
+	return fs, root
+}
+
+func newTemplateUpdateFlagSet() (*flag.FlagSet, *string, *bool) {
+	fs := flag.NewFlagSet("template update", flag.ContinueOnError)
+	root := fs.String("root", ".", "Project root")
+	apply := fs.Bool("apply", false, "Write changes instead of showing a dry run")
+	return fs, root, apply
+}
+
+func normalizeMarkdownFormat(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "text":
+		return "text"
+	case "json":
+		return "json"
+	default:
+		return ""
+	}
+}
+
+func renderMarkdownDiagnostics(diags []indexer.MarkdownDiagnostic, caps indexer.MarkdownCapabilities, format string) ([]byte, error) {
+	switch format {
+	case "text":
+		var b strings.Builder
+		for _, d := range diags {
+			b.WriteString(fmt.Sprintf("[%s] %s %s:%d %s\n", strings.ToUpper(d.Severity), d.Code, d.File, d.Line, d.Message))
+		}
+		b.WriteString("\nCapabilities:\n")
+		names := capabilityNames(caps)
+		for _, name := range names {
+			used := caps.Used[name]
+			supported := caps.Supported[name]
+			b.WriteString(fmt.Sprintf("- %s: used=%t supported=%t\n", name, used, supported))
+		}
+		if len(caps.UnsupportedUsed) > 0 {
+			b.WriteString("Unsupported used:\n")
+			for _, name := range caps.UnsupportedUsed {
+				b.WriteString(fmt.Sprintf("- %s\n", name))
+			}
+		}
+		return []byte(b.String()), nil
+	case "json":
+		errCount, warnCount := indexer.CountDiagnostics(diags)
+		payload := struct {
+			Diagnostics  []indexer.MarkdownDiagnostic `json:"diagnostics"`
+			Capabilities indexer.MarkdownCapabilities `json:"capabilities"`
+			Summary      struct {
+				Errors   int `json:"errors"`
+				Warnings int `json:"warnings"`
+			} `json:"summary"`
+		}{
+			Diagnostics:  diags,
+			Capabilities: caps,
+		}
+		payload.Summary.Errors = errCount
+		payload.Summary.Warnings = warnCount
+		var b strings.Builder
+		enc := json.NewEncoder(&b)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			return nil, err
+		}
+		return []byte(b.String()), nil
+	default:
+		return nil, fmt.Errorf("unsupported format %q", format)
+	}
+}
+
+func capabilityNames(caps indexer.MarkdownCapabilities) []string {
+	names := make([]string, 0, len(caps.Supported))
+	for name := range caps.Supported {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func writeMarkdownDiagnostics(out []byte, filePath string) error {
+	if strings.TrimSpace(filePath) == "" {
+		_, err := os.Stdout.Write(out)
+		return err
+	}
+	return os.WriteFile(filePath, out, 0o644)
 }
 
 func newIndexUsageWriter(fs *flag.FlagSet) func(io.Writer) {
@@ -464,6 +648,27 @@ func newValidateUsageWriter(fs *flag.FlagSet) func(io.Writer) {
 	return func(w io.Writer) {
 		fs.SetOutput(w)
 		fmt.Fprintln(w, "notepub validate")
+		fs.PrintDefaults()
+	}
+}
+
+func templateUsageWriter(w io.Writer) {
+	fmt.Fprintln(w, "notepub template check")
+	fmt.Fprintln(w, "notepub template update [--apply]")
+}
+
+func newTemplateCheckUsageWriter(fs *flag.FlagSet) func(io.Writer) {
+	return func(w io.Writer) {
+		fs.SetOutput(w)
+		fmt.Fprintln(w, "notepub template check")
+		fs.PrintDefaults()
+	}
+}
+
+func newTemplateUpdateUsageWriter(fs *flag.FlagSet) func(io.Writer) {
+	return func(w io.Writer) {
+		fs.SetOutput(w)
+		fmt.Fprintln(w, "notepub template update [--apply]")
 		fs.PrintDefaults()
 	}
 }

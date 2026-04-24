@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,8 +22,10 @@ const (
 
 type Config struct {
 	Site         SiteConfig        `yaml:"site"`
+	Runtime      RuntimeConfig     `yaml:"runtime"`
 	S3           S3Config          `yaml:"s3"`
 	Content      ContentConfig     `yaml:"content"`
+	Markdown     MarkdownConfig    `yaml:"markdown"`
 	OGTypeByType map[string]string `yaml:"og_type_by_type"`
 	Paths        PathsConfig       `yaml:"paths"`
 	Theme        ThemeConfig       `yaml:"theme"`
@@ -43,6 +47,17 @@ type SiteConfig struct {
 	HostAliases    []string `yaml:"host_aliases"`
 }
 
+type RuntimeConfig struct {
+	Mode string      `yaml:"mode"`
+	Dev  RuntimeURLs `yaml:"dev"`
+	Prod RuntimeURLs `yaml:"prod"`
+}
+
+type RuntimeURLs struct {
+	BaseURL      string `yaml:"base_url"`
+	MediaBaseURL string `yaml:"media_base_url"`
+}
+
 type S3Config struct {
 	Endpoint       string `yaml:"endpoint"`
 	Region         string `yaml:"region"`
@@ -57,6 +72,10 @@ type S3Config struct {
 type ContentConfig struct {
 	Source   string `yaml:"source"`
 	LocalDir string `yaml:"local_dir"`
+}
+
+type MarkdownConfig struct {
+	HTMLPolicy string `yaml:"html_policy"`
 }
 
 type PathsConfig struct {
@@ -113,6 +132,14 @@ func Load(path string) (Config, error) {
 	if cfg.Site.ID == "" {
 		cfg.Site.ID = "default"
 	}
+	mode, err := normalizeRuntimeMode(cfg.Runtime.Mode)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Runtime.Mode = mode
+	if err := ApplyRuntimeURLs(&cfg); err != nil {
+		return Config{}, err
+	}
 	cfg.Site.BaseURL = normalizeBaseURL(cfg.Site.BaseURL)
 	cfg.Site.MediaBaseURL = normalizeBaseURL(cfg.Site.MediaBaseURL)
 	cfg.S3.Prefix = normalizePrefix(cfg.S3.Prefix)
@@ -153,6 +180,7 @@ func Load(path string) (Config, error) {
 			return Config{}, fmt.Errorf("s3.access_key and s3.secret_key must be set together")
 		}
 	}
+	cfg.Markdown.HTMLPolicy = normalizeHTMLPolicy(cfg.Markdown.HTMLPolicy)
 	return cfg, nil
 }
 
@@ -203,6 +231,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.S3.Region == "" {
 		cfg.S3.Region = "us-east-1"
 	}
+	if cfg.Markdown.HTMLPolicy == "" {
+		cfg.Markdown.HTMLPolicy = "safe"
+	}
+	if cfg.Runtime.Mode == "" {
+		cfg.Runtime.Mode = "prod"
+	}
 }
 
 func normalizeBaseURL(baseURL string) string {
@@ -221,4 +255,171 @@ func normalizePrefix(prefix string) string {
 		prefix += "/"
 	}
 	return prefix
+}
+
+func normalizeHTMLPolicy(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "safe":
+		return "safe"
+	case "unsafe":
+		return "unsafe"
+	case "deny":
+		return "deny"
+	default:
+		return "safe"
+	}
+}
+
+func normalizeRuntimeMode(v string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "prod", "production":
+		return "prod", nil
+	case "dev", "development":
+		return "dev", nil
+	case "auto":
+		return "auto", nil
+	default:
+		return "", fmt.Errorf("runtime.mode must be \"dev\", \"prod\", or \"auto\"")
+	}
+}
+
+func ApplyRuntimeURLs(cfg *Config) error {
+	mode, err := resolveRuntimeMode(cfg)
+	if err != nil {
+		return err
+	}
+	base := ""
+	media := ""
+	if mode == "dev" {
+		inferred := inferDevBaseURL(cfg.Server.Listen)
+		base = firstNonEmptyURL(cfg.Runtime.Dev.BaseURL, inferred, cfg.Site.BaseURL)
+		media = firstNonEmptyURL(cfg.Runtime.Dev.MediaBaseURL, cfg.Site.MediaBaseURL)
+	} else {
+		base = firstNonEmptyURL(cfg.Runtime.Prod.BaseURL, cfg.Site.BaseURL)
+		media = firstNonEmptyURL(cfg.Runtime.Prod.MediaBaseURL, cfg.Site.MediaBaseURL)
+	}
+	if media == "" && base != "" {
+		media = strings.TrimRight(base, "/") + "/media/"
+	}
+	if envBase := strings.TrimSpace(os.Getenv("NOTEPUB_BASE_URL")); envBase != "" {
+		base = envBase
+	}
+	if envMedia := strings.TrimSpace(os.Getenv("NOTEPUB_MEDIA_BASE_URL")); envMedia != "" {
+		media = envMedia
+	}
+	if media == "" && base != "" {
+		media = strings.TrimRight(base, "/") + "/media/"
+	}
+	cfg.Site.BaseURL = normalizeBaseURL(base)
+	cfg.Site.MediaBaseURL = normalizeBaseURL(media)
+	cfg.Runtime.Mode = mode
+	return nil
+}
+
+func resolveRuntimeMode(cfg *Config) (string, error) {
+	if envMode := strings.TrimSpace(os.Getenv("NOTEPUB_RUNTIME_MODE")); envMode != "" {
+		mode, err := normalizeRuntimeMode(envMode)
+		if err != nil {
+			return "", fmt.Errorf("NOTEPUB_RUNTIME_MODE: %w", err)
+		}
+		switch mode {
+		case "dev", "prod":
+			return mode, nil
+		case "auto":
+			return "", fmt.Errorf("NOTEPUB_RUNTIME_MODE must be \"dev\" or \"prod\"")
+		}
+	}
+	requested, err := normalizeRuntimeMode(cfg.Runtime.Mode)
+	if err != nil {
+		return "", err
+	}
+	if requested != "auto" {
+		return requested, nil
+	}
+	if envIsTrue("CI") || envIsTrue("GITHUB_ACTIONS") {
+		return "prod", nil
+	}
+	if isLocalListen(cfg.Server.Listen) || isLocalURL(cfg.Site.BaseURL) {
+		return "dev", nil
+	}
+	return "prod", nil
+}
+
+func envIsTrue(key string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalListen(listen string) bool {
+	listen = strings.TrimSpace(listen)
+	if listen == "" {
+		return true
+	}
+	if strings.HasPrefix(listen, ":") {
+		return true
+	}
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	host = strings.TrimSpace(host)
+	switch host {
+	case "", "127.0.0.1", "localhost", "::1", "0.0.0.0", "::":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	h := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	switch h {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func firstNonEmptyURL(vals ...string) string {
+	for _, v := range vals {
+		s := strings.TrimSpace(v)
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func inferDevBaseURL(listen string) string {
+	listen = strings.TrimSpace(listen)
+	if listen == "" {
+		return "http://127.0.0.1:8080/"
+	}
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		trim := strings.TrimPrefix(listen, ":")
+		if trim == "" {
+			return "http://127.0.0.1:8080/"
+		}
+		return "http://127.0.0.1:" + trim + "/"
+	}
+	host = strings.TrimSpace(host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/"
 }

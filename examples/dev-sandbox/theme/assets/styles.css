@@ -171,11 +171,51 @@ a:hover {
 }
 
 .callout {
-  margin: 32px 0 80px;
+  margin: 32px 0;
   padding: 20px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: #fff;
+}
+
+.callout-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.callout-body {
+  color: var(--muted);
+}
+
+.obsidian-embed {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.obsidian-embed-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-right: 6px;
+}
+
+.math-inline {
+  font-family: "JetBrains Mono", "Source Code Pro", monospace;
+  background: var(--card);
+  border-radius: 6px;
+  padding: 0 5px;
+}
+
+.math-block {
+  margin: 20px 0;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-family: "JetBrains Mono", "Source Code Pro", monospace;
+  white-space: pre-wrap;
 }
 
 .page {

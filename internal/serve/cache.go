@@ -20,7 +20,10 @@ type cacheRecord struct {
 	StoredAt  string `json:"stored_at"`
 }
 
-func NewHtmlCache(root, theme string) *HtmlCache {
+func NewHtmlCache(root, theme, variant string) *HtmlCache {
+	if variant != "" {
+		theme += "-" + safe(variant)
+	}
 	return &HtmlCache{root: root, theme: theme + "-" + cacheSchemaVersion}
 }
 
@@ -95,4 +98,4 @@ func safe(val string) string {
 	return fmt.Sprintf("%x", []byte(val))
 }
 
-const cacheSchemaVersion = "v2"
+const cacheSchemaVersion = "v3"
