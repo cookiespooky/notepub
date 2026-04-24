@@ -9,12 +9,25 @@ func renderForTest(t *testing.T, markdown string, wiki map[string]string) string
 	t.Helper()
 	md := newMarkdownRenderer()
 	normalized := normalizeMarkdownImages(markdown, "notes/a.md", "", "")
-	normalized = normalizeMarkdownLinks(normalized, wiki)
+	normalized = normalizeMarkdownLinks(normalized, wiki, "")
 	var b strings.Builder
 	if err := md.Convert([]byte(normalized), &b); err != nil {
 		t.Fatalf("render error: %v", err)
 	}
 	return postprocessRenderedHTML(b.String())
+}
+
+func TestMarkdownWikiLinksUseBaseURL(t *testing.T) {
+	md := newMarkdownRenderer()
+	normalized := normalizeMarkdownLinks("[[Note|Read note]] and ![[Note]]", map[string]string{"note": "/note"}, "https://example.com/docs")
+	var b strings.Builder
+	if err := md.Convert([]byte(normalized), &b); err != nil {
+		t.Fatalf("render error: %v", err)
+	}
+	html := postprocessRenderedHTML(b.String())
+	if !strings.Contains(html, `href="https://example.com/docs/note"`) {
+		t.Fatalf("wikilink did not use base URL: %s", html)
+	}
 }
 
 func TestMarkdownSupportsInlineObsidianSyntax(t *testing.T) {

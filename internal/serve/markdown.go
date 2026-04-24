@@ -80,13 +80,13 @@ func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string
 	return normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase)
 }
 
-func normalizeMarkdownLinks(markdown string, wikiMap map[string]string) string {
+func normalizeMarkdownLinks(markdown string, wikiMap map[string]string, baseURL string) string {
 	markdown = transformBlockMath(markdown)
 	if len(wikiMap) == 0 {
 		return mdproc.RewriteOutsideCode(markdown, applyObsidianInlineSyntax)
 	}
 	return mdproc.RewriteOutsideCode(markdown, func(segment string) string {
-		segment = replaceWikiLinksAndEmbeds(segment, wikiMap)
+		segment = replaceWikiLinksAndEmbeds(segment, wikiMap, baseURL)
 		return applyObsidianInlineSyntax(segment)
 	})
 }
@@ -112,7 +112,7 @@ func splitEmbed(inner string) (string, string) {
 	return pathPart, alt
 }
 
-func buildWikiLink(targetRaw string, wikiMap map[string]string) string {
+func buildWikiLink(targetRaw string, wikiMap map[string]string, baseURL string) string {
 	targetPart, heading, display := linkutil.SplitWikiParts(targetRaw)
 	if targetPart == "" {
 		return targetRaw
@@ -138,10 +138,10 @@ func buildWikiLink(targetRaw string, wikiMap map[string]string) string {
 			}
 		}
 	}
-	return "[" + display + "](" + pathVal + ")"
+	return "[" + display + "](" + withBaseURL(pathVal, baseURL) + ")"
 }
 
-func replaceWikiLinksAndEmbeds(segment string, wikiMap map[string]string) string {
+func replaceWikiLinksAndEmbeds(segment string, wikiMap map[string]string, baseURL string) string {
 	if segment == "" {
 		return segment
 	}
@@ -177,14 +177,14 @@ func replaceWikiLinksAndEmbeds(segment string, wikiMap map[string]string) string
 		}
 
 		if isEmbed {
-			link := buildWikiLink(inner, wikiMap)
+			link := buildWikiLink(inner, wikiMap, baseURL)
 			if label, href, ok := parseMarkdownLink(link); ok {
 				out.WriteString(`<div class="obsidian-embed"><span class="obsidian-embed-label">Embedded:</span> <a href="` + html.EscapeString(href) + `">` + html.EscapeString(label) + `</a></div>`)
 			} else {
 				out.WriteString(`<div class="obsidian-embed"><span class="obsidian-embed-label">Embedded:</span> ` + html.EscapeString(link) + `</div>`)
 			}
 		} else {
-			out.WriteString(buildWikiLink(inner, wikiMap))
+			out.WriteString(buildWikiLink(inner, wikiMap, baseURL))
 		}
 		last = end
 	}
@@ -200,6 +200,20 @@ func parseMarkdownLink(v string) (label string, href string, ok bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(m[1]), strings.TrimSpace(m[2]), true
+}
+
+func withBaseURL(pathVal, baseURL string) string {
+	if pathVal == "" || strings.HasPrefix(pathVal, "http://") || strings.HasPrefix(pathVal, "https://") {
+		return pathVal
+	}
+	if !strings.HasPrefix(pathVal, "/") {
+		return pathVal
+	}
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if base == "" {
+		return pathVal
+	}
+	return base + pathVal
 }
 
 func applyObsidianInlineSyntax(segment string) string {

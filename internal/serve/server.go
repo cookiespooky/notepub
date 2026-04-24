@@ -403,7 +403,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[string]string) (string, error) {
 	markdown = normalizeMarkdownImages(markdown, baseKey, s.cfg.S3.Prefix, s.cfg.Site.MediaBaseURL)
-	markdown = normalizeMarkdownLinks(markdown, wikiMap)
+	markdown = normalizeMarkdownLinks(markdown, wikiMap, s.cfg.Site.BaseURL)
 	var buf strings.Builder
 	if err := s.md.Convert([]byte(markdown), &buf); err != nil {
 		return "", err
