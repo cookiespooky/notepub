@@ -223,12 +223,8 @@ func patchConfig(path string, modern bool) (*fileChange, error) {
 	}
 	if !strings.Contains(next, "\nruntime:") && !strings.HasPrefix(next, "runtime:") {
 		block := `runtime:
-  mode: "auto" # auto|dev|prod
-  dev:
-    base_url: "http://127.0.0.1:8080/"
-    media_base_url: "http://127.0.0.1:8080/media/"
-  # Production URLs are normally inferred by the build script.
-  # Add a root CNAME file for a custom domain, or set NOTEPUB_BASE_URL / NOTEPUB_MEDIA_BASE_URL.
+  # auto keeps local builds on 127.0.0.1 and lets CI inject production URLs.
+  mode: "auto"
 `
 		next = strings.Replace(next, "\ncontent:\n", "\n"+block+"content:\n", 1)
 	}
