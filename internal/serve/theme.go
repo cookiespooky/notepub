@@ -56,6 +56,7 @@ type PageData struct {
 	SearchItems      []SearchItem
 	SearchNextCursor string
 	SearchMode       string
+	Settings         map[string]string
 }
 
 type PageInfo struct {
@@ -84,6 +85,17 @@ type MetaData struct {
 type MetaKV struct {
 	Key   string
 	Value string
+}
+
+func cloneSettings(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }
 
 func LoadTheme(themeDir, templatesSubdir, assetsSubdir string) (*Theme, error) {
@@ -203,12 +215,13 @@ func (t *Theme) RenderError(err error, data PageData) (string, error) {
 	return fmt.Sprintf("render error: %s", err.Error()), nil
 }
 
-func (t *Theme) RenderNotFound(baseURL string) (string, error) {
+func (t *Theme) RenderNotFound(baseURL string, settings map[string]string) (string, error) {
 	if t.layout != nil && templateExists(t.layout, "notfound.html") {
 		var buf bytes.Buffer
 		data := PageData{
 			BaseURL:    baseURL,
 			AssetsBase: urlutil.JoinBaseURL(baseURL, "/assets"),
+			Settings:   cloneSettings(settings),
 		}
 		if err := t.layout.ExecuteTemplate(&buf, "notfound.html", data); err == nil {
 			return buf.String(), nil

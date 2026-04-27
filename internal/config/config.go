@@ -21,8 +21,10 @@ const (
 )
 
 type Config struct {
+	CompatMode   string            `yaml:"compat_mode"`
 	Site         SiteConfig        `yaml:"site"`
 	Runtime      RuntimeConfig     `yaml:"runtime"`
+	Overrides    OverridesConfig   `yaml:"overrides"`
 	S3           S3Config          `yaml:"s3"`
 	Content      ContentConfig     `yaml:"content"`
 	Markdown     MarkdownConfig    `yaml:"markdown"`
@@ -34,6 +36,7 @@ type Config struct {
 	Server       ServerConfig      `yaml:"server"`
 	Media        MediaConfig       `yaml:"media"`
 	RulesPath    string            `yaml:"rules_path"`
+	Settings     map[string]string `yaml:"settings"`
 }
 
 type SiteConfig struct {
@@ -56,6 +59,12 @@ type RuntimeConfig struct {
 type RuntimeURLs struct {
 	BaseURL      string `yaml:"base_url"`
 	MediaBaseURL string `yaml:"media_base_url"`
+}
+
+type OverridesConfig struct {
+	SiteNote      string `yaml:"site_note"`
+	InterfaceNote string `yaml:"interface_note"`
+	Strict        bool   `yaml:"strict"`
 }
 
 type S3Config struct {
@@ -129,6 +138,17 @@ func Load(path string) (Config, error) {
 		cfg.RulesPath = filepath.Join(filepath.Dir(path), "rules.yaml")
 	}
 	applyDefaults(&cfg)
+	compatMode, err := resolveCompatMode(&cfg)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CompatMode = compatMode
+	applySettingsOverrides(&cfg)
+	if cfg.CompatMode != "legacy" {
+		if err := applyNoteOverrides(&cfg, filepath.Dir(path)); err != nil {
+			return Config{}, err
+		}
+	}
 	if cfg.Site.ID == "" {
 		cfg.Site.ID = "default"
 	}
@@ -181,10 +201,14 @@ func Load(path string) (Config, error) {
 		}
 	}
 	cfg.Markdown.HTMLPolicy = normalizeHTMLPolicy(cfg.Markdown.HTMLPolicy)
+	finalizeSettings(&cfg)
 	return cfg, nil
 }
 
 func applyDefaults(cfg *Config) {
+	if cfg.CompatMode == "" {
+		cfg.CompatMode = "auto"
+	}
 	if cfg.Content.Source == "" {
 		if cfg.S3.Bucket == "" {
 			cfg.Content.Source = "local"
@@ -281,6 +305,50 @@ func normalizeRuntimeMode(v string) (string, error) {
 	default:
 		return "", fmt.Errorf("runtime.mode must be \"dev\", \"prod\", or \"auto\"")
 	}
+}
+
+func normalizeCompatMode(v string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "auto":
+		return "auto", nil
+	case "modern":
+		return "modern", nil
+	case "legacy":
+		return "legacy", nil
+	default:
+		return "", fmt.Errorf("compat_mode must be \"auto\", \"modern\", or \"legacy\"")
+	}
+}
+
+func resolveCompatMode(cfg *Config) (string, error) {
+	if envMode := strings.TrimSpace(os.Getenv("NOTEPUB_COMPAT_MODE")); envMode != "" {
+		mode, err := normalizeCompatMode(envMode)
+		if err != nil {
+			return "", fmt.Errorf("NOTEPUB_COMPAT_MODE: %w", err)
+		}
+		if mode == "auto" {
+			return autoCompatMode(cfg), nil
+		}
+		return mode, nil
+	}
+	requested, err := normalizeCompatMode(cfg.CompatMode)
+	if err != nil {
+		return "", err
+	}
+	if requested == "auto" {
+		return autoCompatMode(cfg), nil
+	}
+	return requested, nil
+}
+
+func autoCompatMode(cfg *Config) string {
+	if len(cfg.Settings) > 0 {
+		return "modern"
+	}
+	if strings.TrimSpace(cfg.Overrides.SiteNote) != "" || strings.TrimSpace(cfg.Overrides.InterfaceNote) != "" {
+		return "modern"
+	}
+	return "legacy"
 }
 
 func ApplyRuntimeURLs(cfg *Config) error {

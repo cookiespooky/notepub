@@ -35,8 +35,14 @@ func TestLegacyUpdateApplyWritesInfrastructure(t *testing.T) {
 		t.Fatalf("expected apply report, got %q", report)
 	}
 	cfg := readFile(t, filepath.Join(root, "config.yaml"))
-	if !strings.Contains(cfg, "media_base_url:") || !strings.Contains(cfg, "runtime:") {
+	if !strings.Contains(cfg, "media_base_url:") || !strings.Contains(cfg, "runtime:") || !strings.Contains(cfg, "overrides:") || !strings.Contains(cfg, "settings:") {
 		t.Fatalf("config was not updated:\n%s", cfg)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(root, "Site.md")), "site_title: \"Site\"") {
+		t.Fatalf("Site.md was not created from config")
+	}
+	if !strings.Contains(readFile(t, filepath.Join(root, "Interface.md")), "ui_search_placeholder: Search documentation") {
+		t.Fatalf("Interface.md was not created")
 	}
 	build := readFile(t, filepath.Join(root, "scripts", "build.sh"))
 	if !strings.Contains(build, "config.resolved.yaml") || !strings.Contains(build, "GITHUB_PAGES_BASE_URL") {
@@ -66,6 +72,9 @@ func TestCheckReportsManualFindings(t *testing.T) {
 	}
 	if !strings.Contains(report, "root-absolute /assets/logo.svg") {
 		t.Fatalf("expected root absolute finding:\n%s", report)
+	}
+	if !strings.Contains(report, "settings fallback is missing") {
+		t.Fatalf("expected settings fallback status:\n%s", report)
 	}
 }
 

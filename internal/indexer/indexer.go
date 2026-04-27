@@ -1701,7 +1701,10 @@ func writeSitemaps(artifactsDir, baseURL string, idx models.ResolveIndex, cfg ru
 		return err
 	}
 	xmlBody := []byte(xml.Header + string(buf))
-	return os.WriteFile(filepath.Join(artifactsDir, sitemapIndexName), xmlBody, 0o644)
+	if err := os.WriteFile(filepath.Join(artifactsDir, sitemapIndexName), xmlBody, 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(artifactsDir, "sitemap.xml"), xmlBody, 0o644)
 }
 
 func cleanupSitemapChunks(artifactsDir string) error {

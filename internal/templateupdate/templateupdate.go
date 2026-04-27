@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -172,6 +173,11 @@ func plannedLegacyChanges(root string) ([]fileChange, error) {
 	} else if ch != nil {
 		changes = append(changes, *ch)
 	}
+	if noteChanges, err := rootNoteChanges(root, filepath.Join(root, "config.yaml")); err != nil {
+		return nil, err
+	} else {
+		changes = append(changes, noteChanges...)
+	}
 	return changes, nil
 }
 
@@ -186,6 +192,11 @@ func plannedModernChanges(root string) ([]fileChange, error) {
 		return nil, err
 	} else if ch != nil {
 		changes = append(changes, *ch)
+	}
+	if noteChanges, err := rootNoteChanges(root, filepath.Join(root, ".np", "config.yaml")); err != nil {
+		return nil, err
+	} else {
+		changes = append(changes, noteChanges...)
 	}
 	return changes, nil
 }
@@ -228,6 +239,23 @@ func patchConfig(path string, modern bool) (*fileChange, error) {
 `
 		next = strings.Replace(next, "\ncontent:\n", "\n"+block+"content:\n", 1)
 	}
+	if !strings.Contains(next, "\noverrides:") && !strings.HasPrefix(next, "overrides:") {
+		siteNote := "./Site.md"
+		interfaceNote := "./Interface.md"
+		if modern {
+			siteNote = "../Site.md"
+			interfaceNote = "../Interface.md"
+		}
+		block := fmt.Sprintf(`overrides:
+  site_note: "%s"
+  interface_note: "%s"
+`, siteNote, interfaceNote)
+		next = strings.Replace(next, "\ncontent:\n", "\n"+block+"content:\n", 1)
+	}
+	if !strings.Contains(next, "\nsettings:") && !strings.HasPrefix(next, "settings:") {
+		block := defaultSettingsBlock(next)
+		next = strings.Replace(next, "\ncontent:\n", "\n"+block+"content:\n", 1)
+	}
 	if modern {
 		next = strings.ReplaceAll(next, "deploy media URL", "GitHub Pages media URL")
 	}
@@ -239,6 +267,122 @@ func patchConfig(path string, modern bool) (*fileChange, error) {
 		mode = info.Mode().Perm()
 	}
 	return &fileChange{path: path, prev: prev, next: next, mode: mode}, nil
+}
+
+func defaultSettingsBlock(configText string) string {
+	title := yamlValue(configText, "title")
+	if title == "" {
+		title = "Notepub Site"
+	}
+	description := yamlValue(configText, "description")
+	if description == "" {
+		description = "Website powered by Notepub."
+	}
+	ogImage := yamlValue(configText, "default_og_image")
+	if ogImage == "" {
+		ogImage = "/media/notepub.jpg"
+	}
+	return fmt.Sprintf(`settings:
+  site_title: %s
+  site_description: %s
+  site_language: "en"
+  site_default_og_image: %s
+`, quoteYAML(title), quoteYAML(description), quoteYAML(ogImage))
+}
+
+func rootNoteChanges(root, configPath string) ([]fileChange, error) {
+	cfg := ""
+	if data, err := os.ReadFile(configPath); err == nil {
+		cfg = string(data)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read %s: %w", configPath, err)
+	}
+	var changes []fileChange
+	sitePath := filepath.Join(root, "Site.md")
+	if !exists(sitePath) {
+		title := yamlValue(cfg, "title")
+		if title == "" {
+			title = "Notepub Site"
+		}
+		description := yamlValue(cfg, "description")
+		if description == "" {
+			description = "Website powered by Notepub."
+		}
+		ogImage := yamlValue(cfg, "default_og_image")
+		if ogImage == "" || ogImage == "/assets/notepub.jpg" {
+			ogImage = "/media/notepub.jpg"
+		}
+		next := fmt.Sprintf(`---
+site_title: %s
+site_description: %s
+site_language: en
+site_default_og_image: %s
+brand_name: %s
+brand_logo: /media/notepub.svg
+theme_accent: "#0a0a0a"
+theme_link: "#0a0a0a"
+theme_font: system
+theme_heading_font: system
+theme_radius: 14
+---
+
+# Site
+
+Edit these properties in Obsidian to customize the site without changing config.yaml.
+`, quoteYAML(title), quoteYAML(description), quoteYAML(ogImage), quoteYAML(title))
+		changes = append(changes, fileChange{path: sitePath, next: next, mode: 0o644})
+	}
+	interfacePath := filepath.Join(root, "Interface.md")
+	if !exists(interfacePath) {
+		changes = append(changes, fileChange{path: interfacePath, next: defaultInterfaceNote(), mode: 0o644})
+	}
+	return changes, nil
+}
+
+func yamlValue(text, key string) string {
+	re := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(key) + `:\s*(.+?)\s*$`)
+	m := re.FindStringSubmatch(text)
+	if len(m) < 2 {
+		return ""
+	}
+	return strings.Trim(strings.TrimSpace(m[1]), `"'`)
+}
+
+func quoteYAML(v string) string {
+	return strconv.Quote(v)
+}
+
+func defaultInterfaceNote() string {
+	return `---
+ui_home: Home
+ui_documentation_navigation: Documentation navigation
+ui_breadcrumb: Breadcrumb
+ui_open_navigation: Open navigation
+ui_close_navigation: Close navigation
+ui_search: Search
+ui_close: Close
+ui_search_placeholder: Search documentation
+ui_all_results: All results
+ui_search_query: Query
+ui_search_no_results: No results
+ui_search_no_results_found: No results found.
+ui_search_loading: Loading...
+ui_search_error: Error loading results
+ui_next_page: Next page
+ui_home_hubs_title: Documentation Hubs
+ui_hub_materials_title: Section Materials
+ui_related_materials_title: Related Materials
+ui_not_found_title: Page not found
+ui_not_found_lead: The page no longer exists or was never created.
+ui_not_found_back: Back to Home
+ui_error_title: Error
+ui_error_lead: The template could not render this page. Reason is below.
+---
+
+# Interface
+
+Edit these properties in Obsidian to customize basic interface labels.
+`
 }
 
 func patchGitignore(path, entry string) (*fileChange, error) {
@@ -289,6 +433,23 @@ func checks(root string, layout projectLayout) []string {
 		items = append(items, "runtime mode config is present")
 	} else {
 		items = append(items, "runtime mode config is missing")
+	}
+	overridesPresent := fileContains(configPath, "\noverrides:") || fileContains(configPath, "overrides:\n")
+	settingsPresent := fileContains(configPath, "\nsettings:") || fileContains(configPath, "settings:\n")
+	if overridesPresent {
+		items = append(items, "Obsidian settings note overrides are present (optional layer)")
+	} else {
+		items = append(items, "Obsidian settings note overrides are missing (optional)")
+	}
+	if settingsPresent {
+		items = append(items, "settings fallback is present")
+	} else {
+		items = append(items, "settings fallback is missing")
+	}
+	if exists(filepath.Join(root, "Site.md")) && exists(filepath.Join(root, "Interface.md")) {
+		items = append(items, "root settings notes are present (optional)")
+	} else {
+		items = append(items, "root settings notes are missing (optional)")
 	}
 	if fileContains(buildPath, "config.resolved.yaml") {
 		items = append(items, "build script generates resolved production config")
@@ -817,13 +978,14 @@ echo "[1/8] index"
 "$BIN" index --config "$CFG" --rules "$RULES"
 
 echo "[2/8] validate links + markdown"
-if "$BIN" validate --help 2>&1 | grep -q -- " -links"; then
+VALIDATE_HELP="$("$BIN" validate --help 2>&1 || true)"
+if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-links"; then
   "$BIN" validate --config "$CFG" --rules "$RULES" --links
 else
   echo "validate --links is not supported by this notepub binary; skipping"
 fi
 
-if "$BIN" validate --help 2>&1 | grep -q -- " -markdown"; then
+if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-markdown"; then
   "$BIN" validate --config "$CFG" --rules "$RULES" --markdown --markdown-format text
 else
   echo "validate --markdown is not supported by this notepub binary; skipping"

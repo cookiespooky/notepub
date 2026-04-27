@@ -169,7 +169,7 @@ func serveCmd(args []string) error {
 	}
 
 	resolvePath := filepath.Join(cfg.Paths.ArtifactsDir, "resolve.json")
-	store := serve.NewResolveStore(resolvePath, rulesCfg, cfg.Media.ExposeAllUnderPrefix)
+	store := serve.NewResolveStore(resolvePath, rulesCfg, cfg.Media.ExposeAllUnderPrefix, cfg.Settings)
 	cache := serve.NewHtmlCache(cfg.Paths.CacheRoot, cfg.Theme.Name, cfg.Site.BaseURL+"|"+cfg.Site.MediaBaseURL)
 	themeDir := filepath.Join(cfg.Theme.Dir, cfg.Theme.Name)
 	theme, err := serve.LoadTheme(themeDir, cfg.Theme.TemplatesSubdir, cfg.Theme.AssetsSubdir)

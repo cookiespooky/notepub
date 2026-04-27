@@ -30,6 +30,7 @@ All notable changes to this project are documented in this file.
   - `--markdown-format text|json`
   - `--output <path>` (write diagnostics report to file)
 - Added `notepub template check` and `notepub template update` for updating template build infrastructure with dry-run/apply modes.
+- Added flat Obsidian note overrides via `overrides.site_note` and `overrides.interface_note`; all scalar properties are exposed to templates through `.Settings` without a template-specific whitelist.
 - Added regression tests for markdown preprocessing and extraction behavior:
   - `internal/mdproc/mdproc_test.go`
   - `internal/indexer/markdown_extract_test.go`
@@ -48,11 +49,41 @@ All notable changes to this project are documented in this file.
 - Updated README with markdown diagnostics usage and strict validation examples.
 - Updated README with JSON diagnostics output example for CI integration.
 - Updated README with HTML policy behavior and file output example.
+- Updated `notepub template update` to add root `Site.md` / `Interface.md` settings notes and wire them into config when missing.
+- Updated config parsing so `settings:` is now a first-class input source (not template-specific tooling only).
+- Updated settings precedence to: engine defaults -> `settings:` -> optional note overrides.
+- Added optional `overrides.strict` mode for fail-fast note override handling.
+- Updated `template check` status output so missing `overrides`/root notes are reported as optional.
+- Updated `template update` to ensure `settings:` fallback block is present in config when missing.
+- Added compatibility mode switch `compat_mode: auto|modern|legacy` with runtime override via `NOTEPUB_COMPAT_MODE`.
+- Added automatic compatibility resolution in `auto` mode:
+  - `modern` when `settings:` or `overrides` are present
+  - `legacy` when both are absent
+- Added template-author baseline section in README with stable required/optional engine contract for third-party templates.
+- Added CI recommendation for template repositories to gate releases with `compat_mode x notes x source` matrix checks.
 
 ### Fixed
 
 - Fixed false-positive Obsidian embed parsing that could leak into SEO metadata (for example incorrect `og:image`).
 - Fixed link/media extraction false positives from fenced code and inline code snippets.
+- Fixed hard dependency on note override files: missing note overrides now fall back to `settings:` by default.
+- Fixed modern note-overrides coupling for legacy projects: `compat_mode: legacy` now skips note-overrides entirely.
+- Fixed route matching in `serve` for mixed trailing-slash styles:
+  - `/slug/` now resolves to `/slug` when canonical route is slashless
+  - `/legacy-slug` now resolves to `/legacy-slug/` when canonical route includes trailing slash
+  - non-canonical variant is redirected with `301` to canonical path.
+- Fixed local media resolution for template settings-driven assets (logo/icons/OG):
+  - `/media/*` allowlist now also includes media keys referenced from `settings:` values.
+  - local `serve` now falls back from `content.local_dir` to sibling `../media` directory when serving `/media/*`.
+  - `serve` now reloads `resolve.json` on first media allowlist miss to avoid transient first-request 404s before index cache warmup.
+- Fixed `serve` search-page rendering:
+  - `/search` now uses route/meta/body from the `search` content note when available (for example `content/search.md`),
+  - query mode keeps canonical query URL and `noindex, follow` while preserving page body content.
+- Fixed sitemap/robots serving completeness:
+  - `index` now writes both `sitemap-index.xml` and `sitemap.xml` artifacts.
+  - `serve /sitemap.xml` now falls back to `sitemap-index.xml` when alias file is missing.
+- Fixed 404 indexability signaling in `serve`:
+  - 404 responses now include `X-Robots-Tag: noindex, nofollow`.
 
 ### Release
 

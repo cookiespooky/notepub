@@ -120,6 +120,11 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		name = "sitemap-index.xml"
 	}
 	path := filepath.Join(s.cfg.Paths.ArtifactsDir, name)
+	if name == "sitemap.xml" {
+		if _, err := os.Stat(path); err != nil {
+			path = filepath.Join(s.cfg.Paths.ArtifactsDir, "sitemap-index.xml")
+		}
+	}
 	serveFile(w, r, path, "application/xml")
 }
 
@@ -153,15 +158,20 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		allowKey = strings.TrimPrefix(allowKey, "/")
 	}
 	if !s.store.MediaAllowed(allowKey) {
-		http.NotFound(w, r)
-		return
+		resolveCtx, cancel := context.WithTimeout(r.Context(), resolveTimeout)
+		_, _, _ = s.store.GetWithWikiMapContext(resolveCtx)
+		cancel()
+		if !s.store.MediaAllowed(allowKey) {
+			http.NotFound(w, r)
+			return
+		}
 	}
 
 	if s.cfg.Content.Source == "local" {
 		if prefix := s.cfg.S3.Prefix; prefix != "" && !strings.HasPrefix(key, prefix) {
 			key = path.Join(prefix, key)
 		}
-		localPath, err := localutil.ResolvePath(s.cfg.Content.LocalDir, key)
+		localPath, err := resolveLocalMediaPath(s.cfg.Content.LocalDir, key)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -242,6 +252,15 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 		s.renderNotFound(w, r)
 		return
 	}
+
+	resolveCtx, cancel := context.WithTimeout(r.Context(), resolveTimeout)
+	defer cancel()
+	idx, wikiMap, err := s.store.GetWithWikiMapContext(resolveCtx)
+	if err != nil {
+		s.renderNotFound(w, r)
+		return
+	}
+
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	cursor := r.URL.Query().Get("cursor")
 	limit := 10
@@ -254,26 +273,86 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	title := "Search"
-	if q != "" {
-		title = "Search: " + q
-	}
 	meta := models.MetaEntry{
-		Title:     title,
-		Canonical: buildSearchCanonical(s.cfg.Site.BaseURL, q, cursor),
-		Robots:    "noindex, follow",
+		Title: "Search",
 	}
-	data := buildPageData(meta, "", s.cfg.Site.BaseURL)
+	routePath := "/search"
+	route, routeOK := idx.Routes[routePath]
+	if routeOK {
+		if route.Status == 301 && route.RedirectTo != "" {
+			http.Redirect(w, r, route.RedirectTo, http.StatusMovedPermanently)
+			return
+		}
+		if route.Status != 200 {
+			s.renderNotFound(w, r)
+			return
+		}
+		if routeMeta, ok := idx.Meta[routePath]; ok {
+			meta = routeMeta
+		}
+	}
+	if q != "" {
+		baseTitle := strings.TrimSpace(meta.Title)
+		if baseTitle == "" {
+			baseTitle = "Search"
+		}
+		meta.Title = baseTitle + ": " + q
+	}
+	meta.Canonical = buildSearchCanonical(s.cfg.Site.BaseURL, q, cursor)
+	meta.Robots = "noindex, follow"
+
+	body := ""
+	if routeOK && route.S3Key != "" {
+		var markdown string
+		if s.cfg.Content.Source == "local" {
+			localPath, err := localutil.ResolvePath(s.cfg.Content.LocalDir, route.S3Key)
+			if err == nil {
+				if file, openErr := os.Open(localPath); openErr == nil {
+					defer file.Close()
+					if mdBody, readErr := readMarkdownLimited(file); readErr == nil {
+						markdown = mdBody
+					}
+				}
+			}
+		} else if s.cfg.S3.Anonymous {
+			fetchCtx, cancelFetch := context.WithTimeout(r.Context(), fetchTimeout)
+			resp, fetchErr := s.s3client.GetObject(fetchCtx, &s3.GetObjectInput{
+				Bucket: &s.cfg.S3.Bucket,
+				Key:    &route.S3Key,
+			})
+			cancelFetch()
+			if fetchErr == nil {
+				defer resp.Body.Close()
+				if mdBody, readErr := readMarkdownLimited(resp.Body); readErr == nil {
+					markdown = mdBody
+				}
+			}
+		} else {
+			psCtx, cancelPresign := context.WithTimeout(r.Context(), presignTimeout)
+			psURL, _, psErr := s3util.PresignGet(psCtx, s.s3client, s.cfg.S3.Bucket, route.S3Key)
+			cancelPresign()
+			if psErr == nil {
+				fetchCtx, cancelFetch := context.WithTimeout(r.Context(), fetchTimeout)
+				if mdBody, fetchErr := fetchPresigned(fetchCtx, psURL); fetchErr == nil {
+					markdown = mdBody
+				}
+				cancelFetch()
+			}
+		}
+		if markdown != "" {
+			if htmlBody, renderErr := s.renderMarkdown(markdown, route.S3Key, wikiMap); renderErr == nil {
+				body = htmlBody
+			}
+		}
+	}
+
+	data := buildPageData(meta, body, s.cfg)
 	data.IsSearch = true
 	data.SearchMode = "server"
 	data.SearchQuery = q
 	data.SearchItems = items
 	data.SearchNextCursor = nextCursor
-	resolveCtx, cancel := context.WithTimeout(r.Context(), resolveTimeout)
-	defer cancel()
-	if idx, _, err := s.store.GetWithWikiMapContext(resolveCtx); err == nil {
-		data.Collections = buildCollections(idx, s.rules, "/search")
-	}
+	data.Collections = buildCollections(idx, s.rules, "/search")
 
 	rendered, err := s.theme.RenderPage(data)
 	if err != nil {
@@ -295,21 +374,29 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		s.renderNotFound(w, r)
 		return
 	}
-	pathVal := r.URL.Path
-	if pathVal == "" {
-		pathVal = "/"
+	requestPath := r.URL.Path
+	if requestPath == "" {
+		requestPath = "/"
 	}
 
 	resolveCtx, cancel := context.WithTimeout(r.Context(), resolveTimeout)
 	defer cancel()
 	idx, wikiMap, err := s.store.GetWithWikiMapContext(resolveCtx)
 	if err != nil {
-		s.serveStaleOr503(w, r, pathVal)
+		s.serveStaleOr503(w, r, requestPath)
 		return
 	}
-	route, ok := idx.Routes[pathVal]
+	pathVal, route, ok := resolveRoutePath(idx.Routes, requestPath)
 	if !ok {
 		s.renderNotFound(w, r)
+		return
+	}
+	if pathVal != requestPath {
+		target := pathVal
+		if raw := strings.TrimSpace(r.URL.RawQuery); raw != "" {
+			target += "?" + raw
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
 		return
 	}
 	if route.Status == 301 && route.RedirectTo != "" {
@@ -416,7 +503,7 @@ func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[str
 func (s *Server) writePage(w http.ResponseWriter, pathVal string, idx models.ResolveIndex, route models.RouteEntry, body string, cacheStatus string, stale bool) {
 	s.writePageHeaders(w, route, cacheStatus, stale)
 	meta := idx.Meta[pathVal]
-	data := buildPageData(meta, body, s.cfg.Site.BaseURL)
+	data := buildPageData(meta, body, s.cfg)
 	data.Template = s.templateForType(meta.Type)
 	data.Page.NoIndex = route.NoIndex
 	data.SearchMode = "server"
@@ -438,14 +525,15 @@ func (s *Server) writePage(w http.ResponseWriter, pathVal string, idx models.Res
 	w.Write([]byte(rendered))
 }
 
-func buildPageData(meta models.MetaEntry, body, baseURL string) PageData {
+func buildPageData(meta models.MetaEntry, body string, cfg config.Config) PageData {
 	data := PageData{
 		Title:      meta.Title,
 		Canonical:  meta.Canonical,
-		BaseURL:    baseURL,
-		AssetsBase: urlutil.JoinBaseURL(baseURL, "/assets"),
+		BaseURL:    cfg.Site.BaseURL,
+		AssetsBase: urlutil.JoinBaseURL(cfg.Site.BaseURL, "/assets"),
 		Meta:       MetaData{Robots: meta.Robots},
 		Body:       template.HTML(body),
+		Settings:   cloneSettings(cfg.Settings),
 		Page: PageInfo{
 			Type:        meta.Type,
 			Slug:        meta.Slug,
@@ -510,8 +598,9 @@ func (s *Server) writePageHeaders(w http.ResponseWriter, route models.RouteEntry
 }
 
 func (s *Server) renderNotFound(w http.ResponseWriter, r *http.Request) {
-	html, _ := s.theme.RenderNotFound(s.cfg.Site.BaseURL)
+	html, _ := s.theme.RenderNotFound(s.cfg.Site.BaseURL, s.cfg.Settings)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	w.WriteHeader(http.StatusNotFound)
 	w.Write([]byte(html))
 }
@@ -550,6 +639,33 @@ func stripPort(hostport string) string {
 		return host
 	}
 	return hostport
+}
+
+func resolveRoutePath(routes map[string]models.RouteEntry, requestPath string) (string, models.RouteEntry, bool) {
+	normalized := path.Clean("/" + strings.TrimSpace(requestPath))
+	if normalized == "." || normalized == "" {
+		normalized = "/"
+	}
+	candidates := []string{normalized}
+	if normalized != "/" {
+		trimmed := strings.TrimRight(normalized, "/")
+		if trimmed == "" {
+			trimmed = "/"
+		}
+		if trimmed != normalized {
+			candidates = append(candidates, trimmed)
+		}
+		slashed := trimmed + "/"
+		if slashed != normalized {
+			candidates = append(candidates, slashed)
+		}
+	}
+	for _, candidate := range candidates {
+		if route, ok := routes[candidate]; ok {
+			return candidate, route, true
+		}
+	}
+	return "", models.RouteEntry{}, false
 }
 
 func fetchPresigned(ctx context.Context, url string) (string, error) {
@@ -633,6 +749,27 @@ func isSafeKey(key string) bool {
 		return false
 	}
 	return !strings.HasPrefix(clean, "/..")
+}
+
+func resolveLocalMediaPath(contentDir, key string) (string, error) {
+	candidates := []string{contentDir}
+	contentDir = filepath.Clean(contentDir)
+	siblingMediaDir := filepath.Join(filepath.Dir(contentDir), "media")
+	if siblingMediaDir != contentDir {
+		candidates = append(candidates, siblingMediaDir)
+	}
+	for _, baseDir := range candidates {
+		localPath, err := localutil.ResolvePath(baseDir, key)
+		if err != nil {
+			continue
+		}
+		info, err := os.Stat(localPath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		return localPath, nil
+	}
+	return "", os.ErrNotExist
 }
 
 func buildAbsoluteURL(baseURL, p string) string {

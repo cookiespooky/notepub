@@ -1,3 +1,5 @@
+compat_mode: "auto" # auto|modern|legacy
+
 site:
   id: default
   base_url: "https://cookiespooky.github.io/notepub/" # production

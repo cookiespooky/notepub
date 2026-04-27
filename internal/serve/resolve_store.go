@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,12 +29,18 @@ type ResolveStore struct {
 	wiki          map[string]string
 	search        []searchDoc
 	media         map[string]struct{}
+	settingsMedia map[string]struct{}
 	rules         rules.Rules
 	allowAllMedia bool
 }
 
-func NewResolveStore(path string, rulesCfg rules.Rules, allowAllMedia bool) *ResolveStore {
-	return &ResolveStore{path: path, rules: rulesCfg, allowAllMedia: allowAllMedia}
+func NewResolveStore(path string, rulesCfg rules.Rules, allowAllMedia bool, settings map[string]string) *ResolveStore {
+	return &ResolveStore{
+		path:          path,
+		rules:         rulesCfg,
+		allowAllMedia: allowAllMedia,
+		settingsMedia: buildSettingsMediaAllowlist(settings),
+	}
 }
 
 func (s *ResolveStore) Get() (models.ResolveIndex, error) {
@@ -186,11 +194,17 @@ func (s *ResolveStore) MediaAllowed(key string) bool {
 	if s.allowAllMedia {
 		return true
 	}
-	if s.media == nil {
-		return false
+	if s.media != nil {
+		if _, ok := s.media[key]; ok {
+			return true
+		}
 	}
-	_, ok := s.media[key]
-	return ok
+	if s.settingsMedia != nil {
+		if _, ok := s.settingsMedia[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ResolveStore) getSearchDocs() (models.ResolveIndex, []searchDoc, error) {
@@ -516,4 +530,60 @@ func buildMediaAllowlist(idx models.ResolveIndex) map[string]struct{} {
 		return nil
 	}
 	return out
+}
+
+func buildSettingsMediaAllowlist(settings map[string]string) map[string]struct{} {
+	if len(settings) == 0 {
+		return nil
+	}
+	out := map[string]struct{}{}
+	for _, raw := range settings {
+		key := mediaKeyFromSetting(raw)
+		if key == "" {
+			continue
+		}
+		out[key] = struct{}{}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func mediaKeyFromSetting(raw string) string {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return ""
+	}
+	if u, err := url.Parse(v); err == nil && u.Path != "" {
+		if key := mediaKeyFromPath(u.Path); key != "" {
+			return key
+		}
+	}
+	return mediaKeyFromPath(v)
+}
+
+func mediaKeyFromPath(p string) string {
+	v := strings.TrimSpace(p)
+	if v == "" {
+		return ""
+	}
+	v = filepath.ToSlash(v)
+	if strings.HasPrefix(v, "media/") {
+		v = "/" + v
+	}
+	idx := strings.Index(v, "/media/")
+	if idx < 0 {
+		return ""
+	}
+	key := strings.TrimSpace(v[idx+len("/media/"):])
+	key = strings.TrimPrefix(key, "/")
+	if key == "" {
+		return ""
+	}
+	clean := path.Clean("/" + key)
+	if clean == "/" || strings.Contains(clean, "..") {
+		return ""
+	}
+	return strings.TrimPrefix(clean, "/")
 }

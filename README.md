@@ -73,6 +73,55 @@ notepub template update --apply
 
 `template update` is a dry run by default. `--apply` updates recognized infrastructure files such as GitHub Pages workflow, build script, runtime URL config, and generated config ignores. It leaves content and custom theme files unchanged, and reports manual review items such as root-absolute asset links or duplicate markdown titles.
 
+`template check` / `template update` now align with universal engine requirements:
+
+- `overrides` and root settings notes are optional
+- `settings:` fallback in config is treated as a first-class valid baseline
+- update preserves optional note wiring, but also ensures `settings:` fallback exists
+
+## Obsidian-editable settings
+
+Templates can keep a full technical `config.yaml` while exposing basic site settings through `settings:` and optional root Markdown notes.
+
+Engine settings precedence is deterministic:
+
+1. engine defaults
+2. `config.yaml -> settings:`
+3. `overrides.site_note` / `overrides.interface_note` (when available and valid)
+
+Compatibility mode controls how strongly the engine relies on modern note-overrides features:
+
+```yaml
+compat_mode: "auto" # auto|modern|legacy
+```
+
+- `modern`: apply note overrides when configured.
+- `legacy`: ignore note overrides and use engine defaults + `settings:` only.
+- `auto` (default): resolves to `modern` when `settings:` or `overrides` are present, otherwise resolves to `legacy`.
+
+You can override at runtime with `NOTEPUB_COMPAT_MODE=modern|legacy|auto`.
+
+Notes are optional. If an override note is missing or unreadable, Notepub continues with `settings:` values by default.
+For strict pipelines, enable:
+
+```yaml
+overrides:
+  strict: true
+```
+
+Optional notes wiring:
+
+```yaml
+overrides:
+  site_note: "./Site.md"
+  interface_note: "./Interface.md"
+```
+
+Both `settings:` and note frontmatter use flat scalar properties. Notepub copies all scalar properties into `.Settings` without a whitelist, so each template can define its own keys. A small set of system keys also affect core config: `site_title`, `site_description`, `site_url`, and `site_default_og_image`.
+For local `serve`, `/media/*` access also honors media paths declared in `settings:` (for example logo/icon keys). If a file is not found in `content.local_dir`, Notepub also checks sibling `../media`.
+
+Note paths are resolved relative to the config file, so templates that keep config at `.np/config.yaml` should use `../Site.md` and `../Interface.md`.
+
 ## Obsidian support
 
 `notepub` now renders Obsidian syntax by default (no feature toggles required).
@@ -188,14 +237,33 @@ Invoke-WebRequest -Uri "https://github.com/cookiespooky/notepub/releases/downloa
 
 - `config.example.yaml` is a runnable reference and points to `examples/dev-sandbox`.
 - `rules.example.yaml` is a generic reference.
+- compatibility mode is controlled by `compat_mode: auto|modern|legacy` (default `auto`).
 - runtime artifacts are stored under `paths.file_root` (default `/var/lib/notepub`).
 - URL mode switching is handled by `runtime.mode: dev|prod` with `runtime.dev` / `runtime.prod` URL overrides.
+
+## Template Author Baseline
+
+For third-party template authors, the stable engine contract is:
+
+- required: `config.yaml`, `rules.yaml`, `theme/templates/layout.html`, `theme/templates/page.html`
+- optional: `settings:` block in `config.yaml` (recommended baseline)
+- optional: `overrides.site_note` / `overrides.interface_note` for Obsidian-facing customization
+- optional: root `Site.md` and `Interface.md`
+
+Recommended defaults:
+
+- `compat_mode: auto`
+- keep a meaningful `settings:` fallback even when you support note overrides
+- treat `template update` as migration helper, not runtime requirement
+- add CI matrix gate across `compat_mode x notes presence x source mode`
 
 Runtime URL resolution:
 
 - `runtime.mode: prod` (default) uses `runtime.prod.base_url` / `runtime.prod.media_base_url` when set, otherwise falls back to `site.base_url` / `site.media_base_url`.
 - `runtime.mode: dev` uses `runtime.dev.*` values first, then infers base URL from `server.listen`, and finally falls back to `site.*`.
 - canonical and OpenGraph URLs are generated from the resolved base/media URLs, so `index`, `serve`, and `build` use the same normalization path.
+- sitemap artifacts include both `sitemap-index.xml` and `sitemap.xml` for compatibility with common crawler expectations.
+- `serve` 404 responses emit `X-Robots-Tag: noindex, nofollow`.
 
 ## Example project
 
