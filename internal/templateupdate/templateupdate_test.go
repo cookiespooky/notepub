@@ -100,8 +100,14 @@ func TestModernUpdateApplyWritesInfrastructure(t *testing.T) {
 	if !strings.Contains(workflow, "Resolve local content dir from config") {
 		t.Fatalf("modern workflow was not updated:\n%s", workflow)
 	}
+	if !strings.Contains(workflow, "target = (cfg.parent / target).resolve()") {
+		t.Fatalf("modern workflow content dir resolution should be config-relative:\n%s", workflow)
+	}
 	if !strings.Contains(workflow, "path: ./.np/dist") {
 		t.Fatalf("modern workflow artifact path missing:\n%s", workflow)
+	}
+	if !strings.Contains(build, "target = (cfg.parent / target).resolve()") {
+		t.Fatalf("modern build script content dir resolution should be config-relative")
 	}
 }
 
