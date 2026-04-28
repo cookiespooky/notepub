@@ -183,6 +183,24 @@ func plannedLegacyChanges(root string) ([]fileChange, error) {
 
 func plannedModernChanges(root string) ([]fileChange, error) {
 	var changes []fileChange
+	workflowPath := filepath.Join(root, ".github", "workflows", "deploy.yml")
+	plans := []struct {
+		path string
+		next string
+		mode fs.FileMode
+	}{
+		{filepath.Join(root, ".np", "scripts", "build.sh"), modernBuildScript(), 0o755},
+		{workflowPath, modernDeployWorkflow(workflowName(workflowPath), workflowNotepubVersion(workflowPath)), 0o644},
+	}
+	for _, p := range plans {
+		ch, err := changeIfDifferent(p.path, p.next, p.mode)
+		if err != nil {
+			return nil, err
+		}
+		if ch != nil {
+			changes = append(changes, *ch)
+		}
+	}
 	if ch, err := patchConfig(filepath.Join(root, ".np", "config.yaml"), true); err != nil {
 		return nil, err
 	} else if ch != nil {
@@ -1052,5 +1070,535 @@ if [[ -f "$OUT/robots.txt" ]]; then
 fi
 
 echo "[8/8] done -> $OUT"
+`
+}
+
+func modernDeployWorkflow(name, version string) string {
+	if strings.TrimSpace(name) == "" {
+		name = "Deploy Notepub Site to GitHub Pages"
+	}
+	if strings.TrimSpace(version) == "" {
+		version = "v0.1.3"
+	}
+	return `name: ` + name + `
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [content-updated]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NOTEPUB_VERSION: ` + version + `
+      NOTEPUB_BIN: ./.np/bin/notepub
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve content source config
+        id: source
+        env:
+          SOURCE_RAW: ${{ vars.CONTENT_SOURCE }}
+          CONTENT_REPO_RAW: ${{ vars.CONTENT_REPO }}
+          CONTENT_REF_RAW: ${{ vars.CONTENT_REF }}
+        run: |
+          SOURCE="${SOURCE_RAW:-local}"
+          case "$SOURCE" in
+            local|content_repo|s3) ;;
+            *)
+              echo "Unsupported CONTENT_SOURCE: $SOURCE"
+              echo "Allowed values: local, content_repo, s3"
+              exit 1
+              ;;
+          esac
+
+          CONTENT_REPO="${CONTENT_REPO_RAW:-}"
+          CONTENT_REF="${CONTENT_REF_RAW:-main}"
+
+          if [ "$SOURCE" = "content_repo" ] && [ -z "$CONTENT_REPO" ]; then
+            echo "CONTENT_SOURCE=content_repo requires vars.CONTENT_REPO (owner/repo)"
+            exit 1
+          fi
+
+          echo "content_source=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "content_repo=$CONTENT_REPO" >> "$GITHUB_OUTPUT"
+          echo "content_ref=$CONTENT_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve local content dir from config
+        id: contentdir
+        run: |
+          CONTENT_DIR="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          cfg = Path("./.np/config.yaml")
+          if not cfg.exists():
+              print("./content")
+              raise SystemExit(0)
+
+          lines = cfg.read_text(encoding="utf-8").splitlines()
+          in_content = False
+          for line in lines:
+              if re.match(r'^content:\s*$', line):
+                  in_content = True
+                  continue
+              if in_content and re.match(r'^[A-Za-z_][A-Za-z0-9_]*:\s*$', line):
+                  in_content = False
+              if in_content:
+                  m = re.match(r'^\s{2}local_dir:\s*(.+?)\s*$', line)
+                  if m:
+                      value = m.group(1).strip().strip('"').strip("'")
+                      print(value or "./content")
+                      raise SystemExit(0)
+
+          print("./content")
+          PY
+          )"
+          if [ -z "$CONTENT_DIR" ]; then
+            CONTENT_DIR="./content"
+          fi
+          echo "path=$CONTENT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout content repository
+        if: steps.source.outputs.content_source == 'content_repo'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.source.outputs.content_repo }}
+          ref: ${{ steps.source.outputs.content_ref }}
+          path: .external-content
+
+      - name: Sync external content into site content
+        if: steps.source.outputs.content_source == 'content_repo'
+        env:
+          CONTENT_DIR: ${{ steps.contentdir.outputs.path }}
+        run: |
+          mkdir -p "$CONTENT_DIR"
+          find "$CONTENT_DIR" -type f -name '*.md' ! -path "$CONTENT_DIR/search.md" -delete
+
+          rsync -a \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.obsidian/' \
+            --exclude 'README.md' \
+            --exclude 'LICENSE' \
+            --exclude '.gitignore' \
+            --exclude '.gitattributes' \
+            ./.external-content/ "$CONTENT_DIR/"
+
+      - name: Prepare S3 config override
+        if: steps.source.outputs.content_source == 's3'
+        env:
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_PREFIX: ${{ vars.S3_PREFIX }}
+          S3_USE_PATH_STYLE: ${{ vars.S3_USE_PATH_STYLE }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          if [ -z "${S3_ENDPOINT:-}" ] || [ -z "${S3_REGION:-}" ] || [ -z "${S3_BUCKET:-}" ]; then
+            echo "S3 mode requires vars.S3_ENDPOINT, vars.S3_REGION, vars.S3_BUCKET"
+            exit 1
+          fi
+          if [ -z "${S3_ACCESS_KEY:-}" ] || [ -z "${S3_SECRET_KEY:-}" ]; then
+            echo "S3 mode requires secrets.S3_ACCESS_KEY and secrets.S3_SECRET_KEY"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          src = Path("./.np/config.yaml")
+          dst = Path("./.np/config.effective.yaml")
+          lines = src.read_text(encoding="utf-8").splitlines()
+
+          out = []
+          i = 0
+          saw_content = False
+          while i < len(lines):
+              line = lines[i]
+              if re.match(r"^s3:\s*$", line):
+                  i += 1
+                  while i < len(lines) and (lines[i].startswith(" ") or lines[i].strip() == ""):
+                      i += 1
+                  continue
+
+              if re.match(r"^content:\s*$", line):
+                  saw_content = True
+                  out.append(line)
+                  i += 1
+                  saw_source = False
+                  while i < len(lines):
+                      nested = lines[i]
+                      if re.match(r"^[A-Za-z_][A-Za-z0-9_]*:\s*$", nested):
+                          break
+                      if re.match(r"^\s{2}source:\s*", nested):
+                          out.append('  source: "s3"')
+                          saw_source = True
+                      else:
+                          out.append(nested)
+                      i += 1
+                  if not saw_source:
+                      out.append('  source: "s3"')
+                  continue
+
+              out.append(line)
+              i += 1
+
+          if not saw_content:
+              out.extend(["content:", '  source: "s3"'])
+
+          out.extend(
+              [
+                  "",
+                  "s3:",
+                  f'  endpoint: "{os.environ["S3_ENDPOINT"]}"',
+                  f'  region: "{os.environ["S3_REGION"]}"',
+                  f'  force_path_style: {os.environ.get("S3_USE_PATH_STYLE", "true")}',
+                  f'  bucket: "{os.environ["S3_BUCKET"]}"',
+                  f'  prefix: "{os.environ.get("S3_PREFIX", "content")}"',
+                  f'  access_key: "{os.environ["S3_ACCESS_KEY"]}"',
+                  f'  secret_key: "{os.environ["S3_SECRET_KEY"]}"',
+              ]
+          )
+
+          dst.write_text("\n".join(out) + "\n", encoding="utf-8")
+          PY
+
+      - name: Set effective build config
+        id: buildcfg
+        run: |
+          if [ "${{ steps.source.outputs.content_source }}" = "s3" ]; then
+            echo "path=./.np/config.effective.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=./.np/config.yaml" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download notepub binary
+        run: |
+          mkdir -p ./.np/bin
+          curl -fL -o ./.np/bin/notepub "https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_linux_amd64"
+          chmod +x ./.np/bin/notepub
+          ./.np/bin/notepub version
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build site
+        env:
+          NOTEPUB_CONFIG: ${{ steps.buildcfg.outputs.path }}
+          NOTEPUB_BASE_URL: ${{ vars.NOTEPUB_BASE_URL }}
+          NOTEPUB_MEDIA_BASE_URL: ${{ vars.NOTEPUB_MEDIA_BASE_URL }}
+          GITHUB_PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: ./.np/scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./.np/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+`
+}
+
+func modernBuildScript() string {
+	return `#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+BIN="${NOTEPUB_BIN:-notepub}"
+CFG="${NOTEPUB_CONFIG:-./.np/config.yaml}"
+RULES="${NOTEPUB_RULES:-./.np/rules.yaml}"
+ART="${NOTEPUB_ARTIFACTS_DIR:-./.notepub/artifacts}"
+OUT="${NOTEPUB_DIST_DIR:-./.np/dist}"
+
+resolve_content_dir() {
+  python3 - "$CFG" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+cfg = Path(sys.argv[1])
+if not cfg.exists():
+    print("./content")
+    raise SystemExit(0)
+
+lines = cfg.read_text(encoding="utf-8").splitlines()
+in_content = False
+for line in lines:
+    if re.match(r'^content:\s*$', line):
+        in_content = True
+        continue
+    if in_content and re.match(r'^[A-Za-z_][A-Za-z0-9_]*:\s*$', line):
+        in_content = False
+    if in_content:
+        m = re.match(r'^\s{2}local_dir:\s*(.+?)\s*$', line)
+        if m:
+            value = m.group(1).strip().strip('"').strip("'")
+            print(value or "./content")
+            raise SystemExit(0)
+print("./content")
+PY
+}
+
+CONTENT_DIR="${NOTEPUB_CONTENT_DIR:-$(resolve_content_dir)}"
+MEDIA_DIR="${NOTEPUB_MEDIA_DIR:-./media}"
+
+infer_custom_domain_base_url() {
+  local cname="${ROOT}/CNAME"
+  local domain=""
+
+  if [[ ! -f "$cname" ]]; then
+    return 1
+  fi
+
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    line="${line//$'\r'/}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    if [[ -n "$line" ]]; then
+      domain="$line"
+      break
+    fi
+  done < "$cname"
+
+  if [[ -z "$domain" ]]; then
+    return 1
+  fi
+
+  domain="${domain#http://}"
+  domain="${domain#https://}"
+  domain="${domain%%/*}"
+  if [[ -z "$domain" ]]; then
+    return 1
+  fi
+
+  printf 'https://%s/' "$domain"
+}
+
+infer_github_pages_base_url() {
+  local repo="${GITHUB_REPOSITORY:-}"
+  local owner="${GITHUB_REPOSITORY_OWNER:-}"
+
+  if [[ -z "$repo" ]]; then
+    return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="${repo%%/*}"
+  fi
+
+  local name="${repo#*/}"
+  if [[ "$name" == "${owner}.github.io" ]]; then
+    printf 'https://%s.github.io/' "$owner"
+  else
+    printf 'https://%s.github.io/%s/' "$owner" "$name"
+  fi
+}
+
+if [[ -z "${NOTEPUB_BASE_URL:-}" && "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  if [[ -n "${GITHUB_PAGES_BASE_URL:-}" ]]; then
+    export NOTEPUB_BASE_URL="${GITHUB_PAGES_BASE_URL%/}/"
+    echo "Using GitHub Pages URL from configure-pages: $NOTEPUB_BASE_URL"
+  elif BASE_URL="$(infer_custom_domain_base_url)"; then
+    export NOTEPUB_BASE_URL="$BASE_URL"
+    echo "Using custom domain URL from CNAME: $NOTEPUB_BASE_URL"
+  elif BASE_URL="$(infer_github_pages_base_url)"; then
+    export NOTEPUB_BASE_URL="$BASE_URL"
+    echo "Using inferred GitHub Pages URL: $NOTEPUB_BASE_URL"
+  fi
+fi
+
+if [[ -n "${NOTEPUB_BASE_URL:-}" && -z "${NOTEPUB_MEDIA_BASE_URL:-}" ]]; then
+  export NOTEPUB_MEDIA_BASE_URL="${NOTEPUB_BASE_URL%/}/media/"
+fi
+
+echo "[0/9] prepare settings"
+if command -v python3 >/dev/null 2>&1; then
+  CFG="$(python3 ./.np/scripts/prepare-settings.py notes "$CFG")"
+else
+  echo "python3 is required to prepare Notepub template settings"
+  exit 1
+fi
+
+if [[ -n "${NOTEPUB_BASE_URL:-}" ]]; then
+  RESOLVED_CFG="./.np/config.resolved.yaml"
+  mkdir -p "$(dirname "$RESOLVED_CFG")"
+  awk -v base_url="${NOTEPUB_BASE_URL%/}/" \
+      -v media_base_url="${NOTEPUB_MEDIA_BASE_URL%/}/" '
+    BEGIN {
+      in_site = 0
+      seen_site = 0
+      seen_base = 0
+      seen_media = 0
+    }
+    function finish_site() {
+      if (in_site) {
+        if (!seen_base) {
+          print "  base_url: \"" base_url "\" # set by build.sh"
+        }
+        if (!seen_media) {
+          print "  media_base_url: \"" media_base_url "\" # set by build.sh"
+        }
+      }
+      in_site = 0
+    }
+    /^site:[[:space:]]*$/ {
+      finish_site()
+      in_site = 1
+      seen_site = 1
+      seen_base = 0
+      seen_media = 0
+      print
+      next
+    }
+    in_site && /^[A-Za-z_][A-Za-z0-9_]*:/ {
+      finish_site()
+      print
+      next
+    }
+    in_site && /^[[:space:]]*base_url:/ {
+      print "  base_url: \"" base_url "\" # set by build.sh"
+      seen_base = 1
+      next
+    }
+    in_site && /^[[:space:]]*media_base_url:/ {
+      print "  media_base_url: \"" media_base_url "\" # set by build.sh"
+      seen_media = 1
+      next
+    }
+    { print }
+    END {
+      finish_site()
+      if (!seen_site) {
+        print ""
+        print "site:"
+        print "  base_url: \"" base_url "\" # set by build.sh"
+        print "  media_base_url: \"" media_base_url "\" # set by build.sh"
+      }
+    }
+  ' "$CFG" > "$RESOLVED_CFG"
+  CFG="$RESOLVED_CFG"
+  echo "Using resolved build config: $CFG"
+fi
+
+if [[ -z "${NOTEPUB_BIN:-}" && -x "./.np/bin/notepub" ]]; then
+  BIN="./.np/bin/notepub"
+fi
+
+if ! command -v "$BIN" >/dev/null 2>&1; then
+  echo "notepub binary not found: $BIN"
+  echo "Set NOTEPUB_BIN, for example:"
+  echo "  NOTEPUB_BIN=/path/to/notepub $0"
+  exit 1
+fi
+
+if [[ -f "./.np/scripts/generate-runtime-config.sh" ]]; then
+  echo "[1/9] generate runtime config"
+  ./.np/scripts/generate-runtime-config.sh "$CFG"
+fi
+
+echo "[2/9] index"
+"$BIN" index --config "$CFG" --rules "$RULES"
+
+echo "[3/9] validate links + markdown"
+VALIDATE_HELP="$("$BIN" validate --help 2>&1 || true)"
+if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-links"; then
+  "$BIN" validate --config "$CFG" --rules "$RULES" --links
+else
+  echo "validate --links is not supported by this notepub binary; skipping"
+fi
+
+if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-markdown"; then
+  "$BIN" validate --config "$CFG" --rules "$RULES" --markdown --markdown-format text
+else
+  echo "validate --markdown is not supported by this notepub binary; skipping"
+fi
+
+echo "[4/9] build"
+"$BIN" build --config "$CFG" --rules "$RULES" --artifacts "$ART" --dist "$OUT"
+
+echo "[5/9] export content media"
+rm -rf "$OUT/media"
+mkdir -p "$OUT/media"
+
+if [[ -d "$CONTENT_DIR" ]]; then
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --prune-empty-dirs \
+      --exclude '.git/' \
+      --exclude '.github/' \
+      --exclude '.obsidian/' \
+      --exclude '*.md' \
+      "$CONTENT_DIR"/ "$OUT/media/"
+  else
+    find "$CONTENT_DIR" -type f ! -name '*.md' -print0 | while IFS= read -r -d '' f; do
+      rel="${f#$CONTENT_DIR/}"
+      mkdir -p "$OUT/media/$(dirname "$rel")"
+      cp "$f" "$OUT/media/$rel"
+    done
+  fi
+fi
+
+if [[ -d "$MEDIA_DIR" ]]; then
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --prune-empty-dirs \
+      --exclude '.git/' \
+      --exclude '.github/' \
+      --exclude '.obsidian/' \
+      --exclude '*.md' \
+      "$MEDIA_DIR"/ "$OUT/media/"
+  else
+    find "$MEDIA_DIR" -type f ! -name '*.md' -print0 | while IFS= read -r -d '' f; do
+      rel="${f#$MEDIA_DIR/}"
+      mkdir -p "$OUT/media/$(dirname "$rel")"
+      cp "$f" "$OUT/media/$rel"
+    done
+  fi
+fi
+
+if [[ -f "./CNAME" ]]; then
+  cp ./CNAME "$OUT/CNAME"
+fi
+
+echo "[6/9] prepare icons manifest llms"
+python3 ./.np/scripts/prepare-settings.py assets "$CFG" "$OUT"
+
+echo "[7/9] normalize robots"
+if [[ -f "$OUT/robots.txt" ]]; then
+  awk '!/^LLM: /' "$OUT/robots.txt" > "$OUT/robots.txt.tmp"
+  cat "$OUT/robots.txt.tmp" > "$OUT/robots.txt"
+  rm -f "$OUT/robots.txt.tmp"
+fi
+
+echo "[8/9] mirror dist to ./dist (compat)"
+rm -rf ./dist
+mkdir -p ./dist
+cp -R "$OUT"/. ./dist/
+
+echo "[9/9] done -> $OUT"
 `
 }

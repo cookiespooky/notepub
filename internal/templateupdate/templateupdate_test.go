@@ -78,6 +78,33 @@ func TestCheckReportsManualFindings(t *testing.T) {
 	}
 }
 
+func TestModernUpdateApplyWritesInfrastructure(t *testing.T) {
+	root := writeModernProject(t)
+
+	report, err := Update(UpdateOptions{Root: root, Apply: true})
+	if err != nil {
+		t.Fatalf("Update apply: %v", err)
+	}
+	if !strings.Contains(report, "Updated template infrastructure.") {
+		t.Fatalf("expected apply report, got %q", report)
+	}
+	cfg := readFile(t, filepath.Join(root, ".np", "config.yaml"))
+	if !strings.Contains(cfg, "media_base_url:") || !strings.Contains(cfg, "runtime:") || !strings.Contains(cfg, "overrides:") || !strings.Contains(cfg, "settings:") {
+		t.Fatalf("config was not updated:\n%s", cfg)
+	}
+	build := readFile(t, filepath.Join(root, ".np", "scripts", "build.sh"))
+	if !strings.Contains(build, "CONTENT_DIR=\"${NOTEPUB_CONTENT_DIR:-$(resolve_content_dir)}\"") {
+		t.Fatalf("build script was not updated to config-driven content dir")
+	}
+	workflow := readFile(t, filepath.Join(root, ".github", "workflows", "deploy.yml"))
+	if !strings.Contains(workflow, "Resolve local content dir from config") {
+		t.Fatalf("modern workflow was not updated:\n%s", workflow)
+	}
+	if !strings.Contains(workflow, "path: ./.np/dist") {
+		t.Fatalf("modern workflow artifact path missing:\n%s", workflow)
+	}
+}
+
 func writeLegacyProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -113,6 +140,39 @@ jobs:
 	writeFile(t, filepath.Join(root, "theme", "templates", "layout.html"), `<img src="/assets/logo.svg">`)
 	writeFile(t, filepath.Join(root, "content", "home.md"), "---\ntitle: Same\n---\n")
 	writeFile(t, filepath.Join(root, "content", "about.md"), "---\ntitle: Same\n---\n")
+	return root
+}
+
+func writeModernProject(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	mkdir(t, filepath.Join(root, ".np", "scripts"))
+	mkdir(t, filepath.Join(root, ".github", "workflows"))
+	mkdir(t, filepath.Join(root, "content"))
+	writeFile(t, filepath.Join(root, ".np", "config.yaml"), `site:
+  id: modern
+  base_url: "http://127.0.0.1:8080/"
+  title: "Modern Site"
+content:
+  source: "local"
+  local_dir: "../content"
+theme:
+  dir: "./.np"
+  name: "theme"
+rules_path: "./.np/rules.yaml"
+`)
+	writeFile(t, filepath.Join(root, ".np", "rules.yaml"), `version: 1
+`)
+	writeFile(t, filepath.Join(root, ".np", "scripts", "build.sh"), `#!/usr/bin/env bash
+echo old
+`)
+	writeFile(t, filepath.Join(root, ".github", "workflows", "deploy.yml"), `name: Custom Modern Deploy
+jobs:
+  build:
+    env:
+      NOTEPUB_VERSION: v0.1.5
+`)
+	writeFile(t, filepath.Join(root, ".gitignore"), "dist/\n")
 	return root
 }
 

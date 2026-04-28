@@ -73,6 +73,16 @@ notepub template update --apply
 
 `template update` is a dry run by default. `--apply` updates recognized infrastructure files such as GitHub Pages workflow, build script, runtime URL config, and generated config ignores. It leaves content and custom theme files unchanged, and reports manual review items such as root-absolute asset links or duplicate markdown titles.
 
+For modern templates (`.np/config.yaml`), generated infra is config-driven:
+
+- build script reads `content.local_dir` from config (instead of fixed `./content`)
+- deploy workflow resolves content dir from config before content-repo sync
+- optional path overrides are available through:
+  - `NOTEPUB_CONTENT_DIR`
+  - `NOTEPUB_MEDIA_DIR`
+  - `NOTEPUB_ARTIFACTS_DIR`
+  - `NOTEPUB_DIST_DIR`
+
 `template check` / `template update` now align with universal engine requirements:
 
 - `overrides` and root settings notes are optional
