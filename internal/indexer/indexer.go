@@ -430,7 +430,7 @@ func filenameBase(key string) string {
 func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte, site config.SiteConfig, ogTypeByType map[string]string, pathVal, s3Key, prefix string) models.MetaEntry {
 	canonical := stringFromMeta(meta, "canonical")
 	if canonical == "" {
-		canonical = buildAbsoluteURL(site.BaseURL, pathVal)
+		canonical = buildAbsoluteURL(site.BaseURL, urlutil.PublicPath(pathVal))
 	}
 	robots := stringFromMeta(meta, "robots")
 	noindex := boolFromMeta(meta, "noindex")
@@ -1641,7 +1641,7 @@ func writeSitemaps(artifactsDir, baseURL string, idx models.ResolveIndex, cfg ru
 		if cfg.Sitemap.ExcludeDrafts && boolFromMeta(meta.FM, "draft") {
 			continue
 		}
-		loc := buildAbsoluteURL(baseURL, p)
+		loc := buildAbsoluteURL(baseURL, urlutil.PublicPath(p))
 		lastmod := ""
 		if rt.LastModified != "" {
 			if t, err := time.Parse(time.RFC3339, rt.LastModified); err == nil {

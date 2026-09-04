@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Canonical links, `og:url` and sitemap entries now carry the trailing slash of the address the site
+  actually serves. The builder writes every route as `<path>/index.html`, but route keys are stored
+  trimmed because request matching normalises the same way, and the trimmed form was leaking into public
+  URLs — so every canonical and every `<loc>` pointed at an address the host only redirects from.
+  `urlutil.PublicPath` now converts a route key to its browsable form at the three points where a public
+  URL is emitted; route keys, `resolve.json` and `search.json` paths are unchanged.
+
 ## v0.1.7 - 2026-04-29
 
 ### Fixed

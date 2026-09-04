@@ -22,6 +22,7 @@ import (
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
+	"github.com/cookiespooky/notepub/internal/urlutil"
 	"github.com/yuin/goldmark/parser"
 )
 
@@ -315,7 +316,7 @@ func writeMinimalSitemap(distDir, baseURL string, idx models.ResolveIndex, cfg r
 		if cfg.Sitemap.ExcludeDrafts && boolFromMeta(meta.FM, "draft") {
 			continue
 		}
-		loc := buildAbsoluteURL(baseURL, p)
+		loc := buildAbsoluteURL(baseURL, urlutil.PublicPath(p))
 		lastmod := ""
 		if rt.LastModified != "" {
 			if t, err := time.Parse(time.RFC3339, rt.LastModified); err == nil {
