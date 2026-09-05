@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Heading ids are transliterated instead of being discarded. goldmark's own generator drops every
+  multi-byte rune, so a Cyrillic heading rendered as `id="-"` — or, when nothing survived, the literal
+  `id="heading"` — and a page of such headings could not be linked to at all. Worse, `[[page#Heading]]`
+  wikilinks were already resolved with `slug.MakeLang`, so every anchored wikilink pointed at an id that
+  did not exist. Both sides now go through one `headingAnchor`, and duplicates get the usual `-1` suffix.
+
 - Canonical links, `og:url` and sitemap entries now carry the trailing slash of the address the site
   actually serves. The builder writes every route as `<path>/index.html`, but route keys are stored
   trimmed because request matching normalises the same way, and the trimmed form was leaking into public

@@ -8,9 +8,12 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	rendererhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"github.com/cookiespooky/notepub/internal/linkutil"
 	"github.com/cookiespooky/notepub/internal/mdproc"
@@ -132,7 +135,7 @@ func buildWikiLink(targetRaw string, wikiMap map[string]string, baseURL string) 
 		if strings.HasPrefix(heading, "^") {
 			pathVal += "#" + heading
 		} else {
-			anchor := slug.MakeLang(heading, "en")
+			anchor := headingAnchor(heading)
 			if anchor != "" {
 				pathVal = pathVal + "#" + anchor
 			}
@@ -416,6 +419,46 @@ func escapePath(p string) string {
 	return mediautil.EscapePath(p)
 }
 
+// headingAnchor turns heading text into an anchor. One function serves two
+// places — the id rendered on the heading and the anchor a [[page#Heading]]
+// wikilink resolves to — because if they disagree the link points at an id
+// that does not exist.
+func headingAnchor(heading string) string {
+	return slug.MakeLang(heading, "en")
+}
+
+// headingIDs replaces the ids goldmark assigns to headings on its own. Its
+// generator drops every multi-byte rune, so a Cyrillic heading collapses to
+// "-" or, when nothing survives, to the literal "heading" — leaving a page
+// of headings that cannot be linked to and wikilink anchors that resolve
+// nowhere. Transliterating instead keeps the ids ASCII, stable and equal to
+// what headingAnchor produces.
+type headingIDs struct{}
+
+func (headingIDs) Transform(doc *ast.Document, reader text.Reader, _ parser.Context) {
+	seen := map[string]int{}
+	source := reader.Source()
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		heading, ok := node.(*ast.Heading)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		anchor := headingAnchor(string(heading.Text(source)))
+		if anchor == "" {
+			return ast.WalkContinue, nil
+		}
+		seen[anchor]++
+		if count := seen[anchor]; count > 1 {
+			anchor = fmt.Sprintf("%s-%d", anchor, count-1)
+		}
+		heading.SetAttributeString("id", []byte(anchor))
+		return ast.WalkContinue, nil
+	})
+}
+
 func newMarkdownRenderer() goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(
@@ -428,6 +471,7 @@ func newMarkdownRenderer() goldmark.Markdown {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
+			parser.WithASTTransformers(util.Prioritized(headingIDs{}, 900)),
 		),
 		goldmark.WithRendererOptions(
 			rendererhtml.WithUnsafe(),
