@@ -2,9 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## v0.1.8 - 2026-09-10
+
+### Added
+
+- Pagination. A type may declare `paginate: { collection, per_page, path }`: page 1 keeps the type's own
+  permalink and pages 2..N are synthesised from the same content file, each self-canonical and in the
+  sitemap. Templates read the slice through `.Collections.<name>.Page` (`Current`, `Total`, `Count`,
+  `PrevURL`, `NextURL`), which is nil for collections that are not paginated.
+
+  This is the first feature to break the one-content-file-one-route invariant, and ten places walk
+  `idx.Meta` assuming it holds. A synthesised route therefore carries no identity: its `Slug` is cleared,
+  `RouteEntry.PageNum` marks it, and six builders skip it — the slug index, the resolver index, the wiki
+  map, both search indexes and collection membership. Without that the same slug resolves to two paths and
+  the winner is decided by Go's randomised map iteration; the resolver index reports it as a wikimap
+  collision, the others fail silently.
+
+  Route synthesis runs after `validateTypeCounts`, so a paginated singleton does not trip
+  `single_page_of_type`; after `resolveLinks`, which resolves by file name and would call two routes
+  sharing one source file ambiguous; and before `resolve.json` is written, so the sitemap and the static
+  builder pick the routes up without changes.
 
 ### Fixed
+
+- The build is deterministic. Two runs over identical content produced 59 differing files because three
+  things were ordered by Go map iteration: the `og:` meta tags, which were ranged out of a map straight
+  into a slice (a template sorts map keys, a slice keeps insertion order); the items of a collection,
+  where a stable sort faithfully preserved a random input order, so entries sharing a sort key swapped
+  places between builds; and the sitemap. Pagination made this a correctness problem rather than noise —
+  with an unstable order an item moves between pages from one deploy to the next, and can land on both or
+  neither. Two consecutive builds now differ only in `search.json`'s `generated_at`.
 
 - Heading ids are transliterated instead of being discarded. goldmark's own generator drops every
   multi-byte rune, so a Cyrillic heading rendered as `id="-"` — or, when nothing survived, the literal
