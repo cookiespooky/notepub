@@ -26,6 +26,7 @@
 # Go binaries
 /bin/
 /notepub
+/notepub-dev
 /notepub.exe
 /dist/
 *.exe

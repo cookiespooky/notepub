@@ -24,6 +24,14 @@ type RouteEntry struct {
 	NoIndex      bool   `json:"noindex,omitempty"`
 	Status       int    `json:"status"`
 	RouteETag    string `json:"route_etag,omitempty"`
+
+	// PageNum is 0 for every route that comes from a content file and 2..N for
+	// the routes pagination synthesises. It is the one marker that says a route
+	// carries no identity of its own: such a route must stay out of the slug
+	// index, the wiki map, the search index and every collection, or the same
+	// slug would resolve to two different paths.
+	PageNum    int    `json:"page_num,omitempty"`
+	PaginateOf string `json:"paginate_of,omitempty"`
 }
 
 type MetaEntry struct {
@@ -72,6 +80,18 @@ type CatalogItem struct {
 type CollectionResult struct {
 	Items  []CollectionItem  `json:"items,omitempty"`
 	Groups []CollectionGroup `json:"groups,omitempty"`
+	Page   *CollectionPage   `json:"page,omitempty"`
+}
+
+// CollectionPage describes the slice a paginated route received. It is nil on
+// every collection that is not paginated, so a template can branch on it.
+type CollectionPage struct {
+	Current int    `json:"current"`
+	Total   int    `json:"total"`
+	PerPage int    `json:"per_page"`
+	Count   int    `json:"count"`
+	PrevURL string `json:"prev_url,omitempty"`
+	NextURL string `json:"next_url,omitempty"`
 }
 
 type CollectionGroup struct {

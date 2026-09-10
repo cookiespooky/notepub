@@ -279,6 +279,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	newIndex.Links = links
+
+	// Placed here on purpose, and the window is narrow. It must run after
+	// validateTypeCounts, or a paginated singleton trips single_page_of_type;
+	// after resolveLinks, which resolves by file name and would call two routes
+	// sharing one source file ambiguous; and before resolve.json is written, so
+	// the sitemap and the static builder pick the new routes up on their own.
+	if err := synthesizePaginatedRoutes(&newIndex, rulesCfg, cfg.Site.BaseURL, usedPaths); err != nil {
+		return err
+	}
+
 	newIndex.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 
 	if err := writeAtomicJSON(resolvePath, newIndex); err != nil {
@@ -983,6 +993,12 @@ func buildResolverIndex(idx models.ResolveIndex, prefix string) (resolverIndex, 
 		if !ok {
 			continue
 		}
+		// Pages 2..N share the first page's title and source file, so letting
+		// them register resolver keys turns every one of those into a
+		// collision — and picks the winner by map order when it does not.
+		if route.PageNum > 0 {
+			continue
+		}
 		res.typeByPath[pathVal] = meta.Type
 		if meta.Slug != "" {
 			addResolveKey(res.bySlug, res.bySlugLower, meta.Slug, pathVal)
@@ -1650,6 +1666,11 @@ func writeSitemaps(artifactsDir, baseURL string, idx models.ResolveIndex, cfg ru
 		}
 		urls = append(urls, urlEntry{Loc: loc, LastMod: lastmod})
 	}
+	// Routes come out of a map, so without this the sitemap lists the same
+	// URLs in a different order on every build — noise for anything that
+	// diffs the output, and for the crawler fetching it.
+	sort.SliceStable(urls, func(i, j int) bool { return urls[i].Loc < urls[j].Loc })
+
 	chunkSize := 50000
 	chunks := [][]urlEntry{}
 	for i := 0; i < len(urls); i += chunkSize {
@@ -1765,6 +1786,11 @@ func writeSearchIndex(artifactsDir string, idx models.ResolveIndex, cfg rules.Ru
 	for pathVal, meta := range idx.Meta {
 		route, ok := idx.Routes[pathVal]
 		if !ok || route.Status != 200 || route.NoIndex {
+			continue
+		}
+		// Pages 2..N repeat the first page's title and description; indexing
+		// them would put the same result in search several times.
+		if route.PageNum > 0 {
 			continue
 		}
 		if len(cfg.Search.IncludeTypes) > 0 && !typeAllowed(meta.Type, cfg.Search.IncludeTypes) {

@@ -5,6 +5,14 @@ import (
 	"encoding/json"
 	"expvar"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/cookiespooky/notepub/internal/config"
+	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/models"
+	"github.com/cookiespooky/notepub/internal/rules"
+	"github.com/cookiespooky/notepub/internal/s3util"
+	"github.com/cookiespooky/notepub/internal/urlutil"
+	"github.com/yuin/goldmark"
 	"html/template"
 	"io"
 	"mime"
@@ -14,19 +22,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/yuin/goldmark"
-
-	"github.com/cookiespooky/notepub/internal/config"
-	"github.com/cookiespooky/notepub/internal/localutil"
-	"github.com/cookiespooky/notepub/internal/models"
-	"github.com/cookiespooky/notepub/internal/rules"
-	"github.com/cookiespooky/notepub/internal/s3util"
-	"github.com/cookiespooky/notepub/internal/urlutil"
 )
 
 const (
@@ -551,8 +550,16 @@ func buildPageData(meta models.MetaEntry, body string, cfg config.Config) PageDa
 		FM: meta.FM,
 	}
 	if len(meta.OpenGraph) > 0 {
-		for k, v := range meta.OpenGraph {
-			data.Meta.OpenGraph = append(data.Meta.OpenGraph, MetaKV{Key: "og:" + k, Value: v})
+		// Ranging the map straight into a slice made the order of the og tags
+		// change from build to build: a template sorts map keys for you, a
+		// slice keeps whatever order it was appended in.
+		keys := make([]string, 0, len(meta.OpenGraph))
+		for k := range meta.OpenGraph {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			data.Meta.OpenGraph = append(data.Meta.OpenGraph, MetaKV{Key: "og:" + k, Value: meta.OpenGraph[k]})
 		}
 	}
 	if len(meta.JSONLD) > 0 {

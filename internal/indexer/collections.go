@@ -30,44 +30,9 @@ func materializeCollections(artifactsDir string, idx models.ResolveIndex, cfg ru
 		if strings.Contains(rule.FromSlug, "{{") || strings.Contains(rule.ToSlug, "{{") {
 			return fmt.Errorf("collection %q materialize cannot use page placeholders", name)
 		}
-		items := []models.CollectionItem{}
-		switch rule.Kind {
-		case "filter":
-			for pathVal := range idx.Meta {
-				items = append(items, buildCollectionItem(idx, pathVal))
-			}
-		case "forward":
-			if idx.Links == nil {
-				break
-			}
-			fromPath := slugIndex[rule.FromSlug]
-			if fromPath == "" {
-				break
-			}
-			for _, target := range idx.Links[fromPath][rule.Link] {
-				items = append(items, buildCollectionItem(idx, target))
-			}
-		case "backrefs":
-			if idx.Links == nil {
-				break
-			}
-			toPath := slugIndex[rule.ToSlug]
-			if toPath == "" {
-				break
-			}
-			for _, source := range backrefs[rule.Link][toPath] {
-				items = append(items, buildCollectionItem(idx, source))
-			}
-		default:
+		items, ok := collectionItems(idx, rule, cfg, slugIndex, backrefs)
+		if !ok {
 			continue
-		}
-
-		items = filterCollectionItems(items, rule.Where, cfg.FMSchema)
-		if rule.Sort.By != "" {
-			sortCollectionItems(items, rule.Sort, cfg.FMSchema)
-		}
-		if rule.Limit > 0 && len(items) > rule.Limit {
-			items = items[:rule.Limit]
 		}
 
 		result := models.CollectionResult{}
@@ -83,6 +48,63 @@ func materializeCollections(artifactsDir string, idx models.ResolveIndex, cfg ru
 		}
 	}
 	return nil
+}
+
+// collectionItems assembles, filters, sorts and limits one collection.
+// Pagination needs the same list the renderer will slice, so this is the single
+// place that decides what is in a collection; ok is false for an unknown kind.
+func collectionItems(idx models.ResolveIndex, rule rules.CollectionRule, cfg rules.Rules, slugIndex map[string]string, backrefs map[string]map[string][]string) ([]models.CollectionItem, bool) {
+	items := []models.CollectionItem{}
+	switch rule.Kind {
+	case "filter":
+		for pathVal := range idx.Meta {
+			// A synthesised page carries a copy of another page's metadata and
+			// would otherwise enter the collection as a duplicate of it.
+			if idx.Routes[pathVal].PageNum > 0 {
+				continue
+			}
+			items = append(items, buildCollectionItem(idx, pathVal))
+		}
+	case "forward":
+		if idx.Links == nil {
+			break
+		}
+		fromPath := slugIndex[rule.FromSlug]
+		if fromPath == "" {
+			break
+		}
+		for _, target := range idx.Links[fromPath][rule.Link] {
+			items = append(items, buildCollectionItem(idx, target))
+		}
+	case "backrefs":
+		if idx.Links == nil {
+			break
+		}
+		toPath := slugIndex[rule.ToSlug]
+		if toPath == "" {
+			break
+		}
+		for _, source := range backrefs[rule.Link][toPath] {
+			items = append(items, buildCollectionItem(idx, source))
+		}
+	default:
+		return nil, false
+	}
+
+	// Items arrive in Go map order, which is randomised, and a stable sort
+	// faithfully preserves that randomness: two builds of the same content put
+	// items with equal sort keys in different places. Ordering by path first
+	// gives the stable sort something deterministic to preserve.
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+
+	items = filterCollectionItems(items, rule.Where, cfg.FMSchema)
+	if rule.Sort.By != "" {
+		sortCollectionItems(items, rule.Sort, cfg.FMSchema)
+	}
+	if rule.Limit > 0 && len(items) > rule.Limit {
+		items = items[:rule.Limit]
+	}
+	return items, true
 }
 
 func buildCollectionItem(idx models.ResolveIndex, pathVal string) models.CollectionItem {
@@ -106,6 +128,11 @@ func buildSlugIndex(idx models.ResolveIndex) map[string]string {
 	out := map[string]string{}
 	for pathVal, meta := range idx.Meta {
 		if meta.Slug == "" {
+			continue
+		}
+		// Without this a paginated route competes for its own slug, and since
+		// Go randomises map iteration the winner changes between builds.
+		if idx.Routes[pathVal].PageNum > 0 {
 			continue
 		}
 		if _, ok := out[meta.Slug]; !ok {

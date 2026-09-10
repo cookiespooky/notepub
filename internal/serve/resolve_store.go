@@ -238,6 +238,11 @@ func (s *ResolveStore) cachedSearchOrError(err error) (models.ResolveIndex, []se
 func buildWikiMap(idx models.ResolveIndex) map[string]string {
 	out := map[string]string{}
 	for pathVal, meta := range idx.Meta {
+		// A paginated route repeats another page's title, slug and file name;
+		// letting it register those makes [[wikilinks]] land on page 2.
+		if idx.Routes[pathVal].PageNum > 0 {
+			continue
+		}
 		route, ok := idx.Routes[pathVal]
 		if ok && route.S3Key != "" {
 			name := filenameBase(route.S3Key)
@@ -286,6 +291,9 @@ type scoredItem struct {
 func buildSearchIndex(idx models.ResolveIndex, cfg rules.Rules) []searchDoc {
 	docs := make([]searchDoc, 0, len(idx.Meta))
 	for pathVal, meta := range idx.Meta {
+		if idx.Routes[pathVal].PageNum > 0 {
+			continue
+		}
 		route, ok := idx.Routes[pathVal]
 		if !ok || route.Status != 200 {
 			continue

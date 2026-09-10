@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/cookiespooky/notepub/internal/models"
+	"github.com/cookiespooky/notepub/internal/paginate"
 	"github.com/cookiespooky/notepub/internal/rules"
+	"github.com/cookiespooky/notepub/internal/urlutil"
 )
 
 func buildCollections(idx models.ResolveIndex, cfg rules.Rules, currentPath string) map[string]models.CollectionResult {
@@ -24,6 +26,9 @@ func buildCollections(idx models.ResolveIndex, cfg rules.Rules, currentPath stri
 		switch rule.Kind {
 		case "filter":
 			for pathVal := range idx.Meta {
+				if idx.Routes[pathVal].PageNum > 0 {
+					continue
+				}
 				items = append(items, buildCollectionItem(idx, pathVal))
 			}
 		case "forward":
@@ -60,6 +65,10 @@ func buildCollections(idx models.ResolveIndex, cfg rules.Rules, currentPath stri
 			continue
 		}
 
+		// Same reason as in the indexer: map order is randomised and a stable
+		// sort preserves it, so equal sort keys shuffle between builds.
+		sort.SliceStable(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+
 		items = filterItems(items, rule.Where, cfg.FMSchema)
 		if rule.Sort.By != "" {
 			sortItems(items, rule.Sort, cfg.FMSchema)
@@ -72,6 +81,9 @@ func buildCollections(idx models.ResolveIndex, cfg rules.Rules, currentPath stri
 		if rule.GroupBy.By != "" {
 			result.Groups = groupItems(items, rule.GroupBy, cfg.FMSchema)
 		} else {
+			if page := paginateSlice(idx, cfg, currentPath, currentMeta, name, &items); page != nil {
+				result.Page = page
+			}
 			result.Items = items
 		}
 		out[name] = result
@@ -100,6 +112,9 @@ func buildSlugIndex(idx models.ResolveIndex) map[string]string {
 	out := map[string]string{}
 	for pathVal, meta := range idx.Meta {
 		if meta.Slug == "" {
+			continue
+		}
+		if idx.Routes[pathVal].PageNum > 0 {
 			continue
 		}
 		if _, ok := out[meta.Slug]; !ok {
@@ -374,4 +389,59 @@ func toBool(val interface{}) bool {
 	default:
 		return fmt.Sprint(val) == "true"
 	}
+}
+
+// paginateSlice trims items to the page the current route stands for and
+// returns what the template needs to draw the control. It returns nil when the
+// current type does not paginate this collection, which is the usual case.
+//
+// The page count comes from the same arithmetic the indexer used to decide how
+// many routes to create, so the last page is never empty and no article falls
+// between two pages.
+func paginateSlice(idx models.ResolveIndex, cfg rules.Rules, currentPath string, currentMeta models.MetaEntry, name string, items *[]models.CollectionItem) *models.CollectionPage {
+	typeDef, ok := cfg.Types[currentMeta.Type]
+	if !ok || typeDef.Paginate == nil || typeDef.Paginate.Collection != name || typeDef.Paginate.PerPage <= 0 {
+		return nil
+	}
+	rule := typeDef.Paginate
+	route := idx.Routes[currentPath]
+
+	current := route.PageNum
+	if current == 0 {
+		current = 1
+	}
+	basePath := currentPath
+	if route.PaginateOf != "" {
+		basePath = route.PaginateOf
+	}
+	baseSlug := idx.Meta[basePath].Slug
+
+	total := len(*items)
+	pages := paginate.PageCount(total, rule.PerPage)
+	start, end := paginate.Bounds(total, rule.PerPage, current)
+
+	info := &models.CollectionPage{
+		Current: current,
+		Total:   pages,
+		PerPage: rule.PerPage,
+		Count:   total,
+	}
+	if current > 1 {
+		if current == 2 {
+			info.PrevURL = urlutil.PublicPath(basePath)
+		} else {
+			info.PrevURL = urlutil.PublicPath(paginate.Path(expandPaginateSlug(rule.Path, baseSlug), current-1))
+		}
+	}
+	if current < pages {
+		info.NextURL = urlutil.PublicPath(paginate.Path(expandPaginateSlug(rule.Path, baseSlug), current+1))
+	}
+
+	*items = (*items)[start:end]
+	return info
+}
+
+func expandPaginateSlug(tmpl, slug string) string {
+	out := strings.ReplaceAll(tmpl, "{{ slug }}", slug)
+	return strings.ReplaceAll(out, "{{slug}}", slug)
 }

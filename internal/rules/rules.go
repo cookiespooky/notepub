@@ -29,6 +29,19 @@ type TypeDef struct {
 	Template  string        `yaml:"template"`
 	Permalink string        `yaml:"permalink"`
 	IncludeIn IncludeInRule `yaml:"include_in"`
+	Paginate  *PaginateRule `yaml:"paginate,omitempty"`
+}
+
+// PaginateRule splits one content file across several routes.
+//
+// Pagination is declared on the type rather than on the collection because the
+// type is what owns a template and a permalink; a collection has no idea who
+// renders it. Page 1 keeps the type's own permalink, so only pages 2..N are
+// synthesised, and Path is the template for those.
+type PaginateRule struct {
+	Collection string `yaml:"collection"`
+	PerPage    int    `yaml:"per_page"`
+	Path       string `yaml:"path"`
 }
 
 type IncludeInRule struct {
