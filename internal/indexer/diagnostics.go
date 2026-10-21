@@ -13,6 +13,7 @@ import (
 	"github.com/cookiespooky/notepub/internal/linkutil"
 	"github.com/cookiespooky/notepub/internal/localutil"
 	"github.com/cookiespooky/notepub/internal/mdproc"
+	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
@@ -54,6 +55,7 @@ func ValidateMarkdown(ctx context.Context, cfg config.Config, idx models.Resolve
 }
 
 func ValidateMarkdownWithCapabilities(ctx context.Context, cfg config.Config, idx models.ResolveIndex) ([]MarkdownDiagnostic, MarkdownCapabilities, error) {
+	finder := mediautil.NewFinder(idx.MediaFiles)
 	resolver, err := buildResolverIndex(idx, cfg.S3.Prefix)
 	if err != nil {
 		return nil, MarkdownCapabilities{}, fmt.Errorf("build resolver index: %w", err)
@@ -139,13 +141,13 @@ func ValidateMarkdownWithCapabilities(ctx context.Context, cfg config.Config, id
 			continue
 		}
 		mergeCapabilities(&capabilities, detectMarkdownCapabilities(string(content)))
-		diagnostics = append(diagnostics, diagnoseMarkdownContent(key, string(content), resolver, rule, cfg.Markdown.HTMLPolicy)...)
+		diagnostics = append(diagnostics, diagnoseMarkdownContent(key, string(content), resolver, rule, cfg.Markdown.HTMLPolicy, finder, cfg.S3.Prefix)...)
 	}
 	capabilities.UnsupportedUsed = buildUnsupportedList(capabilities)
 	return diagnostics, capabilities, nil
 }
 
-func diagnoseMarkdownContent(fileKey string, markdown string, res resolverIndex, rule rules.ResolveRule, htmlPolicy string) []MarkdownDiagnostic {
+func diagnoseMarkdownContent(fileKey string, markdown string, res resolverIndex, rule rules.ResolveRule, htmlPolicy string, finder *mediautil.Finder, prefix string) []MarkdownDiagnostic {
 	lines := strings.Split(mdproc.MaskCodeWithSpaces(mdproc.NormalizeLineEndings(markdown)), "\n")
 	out := make([]MarkdownDiagnostic, 0)
 	htmlWarnedLine := map[int]struct{}{}
@@ -172,6 +174,18 @@ func diagnoseMarkdownContent(fileKey string, markdown string, res resolverIndex,
 			}
 			embedTarget := stripWikiAnchor(targetPart)
 			if isEmbed && isMediaTarget(embedTarget) {
+				// The vault's files are known only when the index listed them.
+				if finder.Len() > 0 {
+					if _, ok := finder.Find(embedTarget, fileKey, prefix); !ok {
+						out = append(out, MarkdownDiagnostic{
+							Code:     "NP-MD-EMBED-MISSING",
+							Severity: "warn",
+							File:     fileKey,
+							Line:     lineNo,
+							Message:  fmt.Sprintf("%s: no such file in the content folder or media folders", raw),
+						})
+					}
+				}
 				continue
 			}
 			if strings.Contains(targetPart, "#^") {

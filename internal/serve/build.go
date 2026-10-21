@@ -104,6 +104,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 
 	md := newMarkdownRenderer()
 	wikiMap := buildWikiMap(idx)
+	finder := mediautil.NewFinder(idx.MediaFiles)
 	paths := sortedRoutes(idx.Routes)
 	for _, pathVal := range paths {
 		route := idx.Routes[pathVal]
@@ -137,7 +138,7 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		if err != nil {
 			return fmt.Errorf("fetch %s: %w", route.S3Key, err)
 		}
-		rendered, err := renderMarkdownForBuild(string(body), route.S3Key, cfg.S3.Prefix, cfg.Site.MediaBaseURL, cfg.Site.BaseURL, wikiMap, md, cfg.Markdown.HTMLPolicy)
+		rendered, err := renderMarkdownForBuild(string(body), route.S3Key, cfg.S3.Prefix, cfg.Site.MediaBaseURL, cfg.Site.BaseURL, wikiMap, md, cfg.Markdown.HTMLPolicy, finder)
 		if err != nil {
 			return fmt.Errorf("render markdown %s: %w", route.S3Key, err)
 		}
@@ -367,8 +368,8 @@ func writeSearchIndex(distDir string, idx models.ResolveIndex, rulesCfg rules.Ru
 	return writeFile(filepath.Join(distDir, "search.json"), b)
 }
 
-func renderMarkdownForBuild(markdown, baseKey, prefix, mediaBase, baseURL string, wikiMap map[string]string, mdRenderer markdownRenderer, htmlPolicy string) (string, error) {
-	markdown = normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase)
+func renderMarkdownForBuild(markdown, baseKey, prefix, mediaBase, baseURL string, wikiMap map[string]string, mdRenderer markdownRenderer, htmlPolicy string, finder *mediautil.Finder) (string, error) {
+	markdown = normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase, finder)
 	markdown = normalizeMarkdownLinks(markdown, wikiMap, baseURL)
 	var buf strings.Builder
 	if err := mdRenderer.Convert([]byte(markdown), &buf); err != nil {

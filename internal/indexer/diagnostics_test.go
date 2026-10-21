@@ -38,7 +38,7 @@ func TestDiagnoseMarkdownContent(t *testing.T) {
 		"`[[CodeIgnored]]`",
 	}, "\n")
 
-	diags := diagnoseMarkdownContent("content/a.md", md, res, rule, "safe")
+	diags := diagnoseMarkdownContent("content/a.md", md, res, rule, "safe", nil, "")
 	if len(diags) != 3 {
 		t.Fatalf("expected 3 diagnostics, got %d: %#v", len(diags), diags)
 	}
@@ -73,7 +73,7 @@ func TestCountDiagnostics(t *testing.T) {
 func TestDiagnoseMarkdownContentPolicyDeny(t *testing.T) {
 	res := testResolver(t)
 	rule := rules.ResolveRule{Order: []string{"path", "filename", "slug"}, Ambiguity: "error", Missing: "error", Case: "insensitive"}
-	diags := diagnoseMarkdownContent("content/a.md", "<span>x</span>", res, rule, "deny")
+	diags := diagnoseMarkdownContent("content/a.md", "<span>x</span>", res, rule, "deny", nil, "")
 	if len(diags) != 1 || diags[0].Code != "NP-MD-RAW-HTML-DENY" || diags[0].Severity != "error" {
 		t.Fatalf("unexpected diagnostics: %#v", diags)
 	}
@@ -82,7 +82,7 @@ func TestDiagnoseMarkdownContentPolicyDeny(t *testing.T) {
 func TestDiagnoseMarkdownContentBlockRefUnsupported(t *testing.T) {
 	res := testResolver(t)
 	rule := rules.ResolveRule{Order: []string{"path", "filename", "slug"}, Ambiguity: "error", Missing: "error", Case: "insensitive"}
-	diags := diagnoseMarkdownContent("content/a.md", "Block ref [[Note#^block-1]]", res, rule, "safe")
+	diags := diagnoseMarkdownContent("content/a.md", "Block ref [[Note#^block-1]]", res, rule, "safe", nil, "")
 	if len(diags) == 0 {
 		t.Fatalf("expected diagnostics for block ref")
 	}

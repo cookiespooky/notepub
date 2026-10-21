@@ -3,6 +3,8 @@ package serve
 import (
 	"strings"
 	"testing"
+
+	"github.com/cookiespooky/notepub/internal/mediautil"
 )
 
 func renderForTest(t *testing.T, markdown string, wiki map[string]string) string {
@@ -81,5 +83,16 @@ func TestMarkdownFootnoteAndRawHTML(t *testing.T) {
 	}
 	if !strings.Contains(html, "<span data-x=\"1\">ok</span>") {
 		t.Fatalf("raw html not preserved: %s", html)
+	}
+}
+
+func TestEmbedFoundByName(t *testing.T) {
+	finder := mediautil.NewFinder([]string{"foto/komod.svg"})
+	got := normalizeMarkdownImages("![[komod.svg|Комод]]\n![x](local.png)", "raboty/komod.md", "", "https://ex.com/media", finder)
+	if !strings.Contains(got, "![Комод](https://ex.com/media/foto/komod.svg)") {
+		t.Errorf("вставка не нашлась по имени: %q", got)
+	}
+	if !strings.Contains(got, "(https://ex.com/media/raboty/local.png)") {
+		t.Errorf("обычная markdown-картинка остаётся относительной к заметке: %q", got)
 	}
 }

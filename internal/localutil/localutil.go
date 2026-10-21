@@ -126,3 +126,38 @@ func fileETag(path string) (string, error) {
 func ptrTime(t time.Time) *time.Time {
 	return &t
 }
+
+// ListMediaFiles returns the paths, relative to root, of every file that is not
+// a note. Hidden folders (.obsidian, .git, .trash) are skipped.
+func ListMediaFiles(root string) ([]string, error) {
+	root = filepath.Clean(root)
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	out := []string{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if p != root && strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(name, ".") || strings.HasSuffix(strings.ToLower(name), ".md") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		out = append(out, filepath.ToSlash(rel))
+		return nil
+	})
+	return out, err
+}

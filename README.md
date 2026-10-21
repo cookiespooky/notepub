@@ -135,6 +135,8 @@ Note paths are resolved relative to the config file, so templates that keep conf
 
 ## Obsidian support
 
+Embeds (`![[photo.jpg]]`) find their file as Obsidian does: next to the note, then from the content root, then by file name anywhere in the content folder and in `media.dirs` (folders the build publishes under `/media/`, such as a vault's `media/`). With several files of one name the shortest path wins. A Markdown image (`![](photo.jpg)`) stays relative to the note.
+
 `notepub` now renders Obsidian syntax by default (no feature toggles required).
 
 What is supported in-engine:

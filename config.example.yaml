@@ -41,6 +41,9 @@ feed:
   enabled: false # true: RSS at /feed.xml with the newest pages of article types
   limit: 20
 
+media:
+  dirs: [] # extra folders published under /media/, searched by file name for ![[embeds]]
+
 og_type_by_type:
   article: "article"
   page: "website"

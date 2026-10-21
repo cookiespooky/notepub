@@ -63,13 +63,6 @@ func Run(ctx context.Context, cfg config.Config) error {
 	oldIndex, _ := loadResolve(resolvePath)
 	oldSnapshot, _ := loadSnapshot(snapshotPath)
 	metaOpts := metaOptionsFromConfig(cfg)
-	fingerprintPath := filepath.Join(snapshotDir, "config.sha256")
-	fingerprint := configFingerprint(cfg)
-	if prev, err := os.ReadFile(fingerprintPath); err != nil || strings.TrimSpace(string(prev)) != fingerprint {
-		// Settings that every page's meta depends on changed (or the engine
-		// did): reuse nothing from the previous run.
-		oldSnapshot = map[string]models.SnapshotEntry{}
-	}
 
 	if oldIndex.Routes == nil {
 		oldIndex.Routes = map[string]models.RouteEntry{}
@@ -116,6 +109,20 @@ func Run(ctx context.Context, cfg config.Config) error {
 		}
 	default:
 		return fmt.Errorf("unsupported content source: %s", cfg.Content.Source)
+	}
+
+	mediaFiles, err := listMediaFiles(cfg, objects)
+	if err != nil {
+		return fmt.Errorf("list media: %w", err)
+	}
+	metaOpts.Finder = mediautil.NewFinder(mediaFiles)
+
+	fingerprintPath := filepath.Join(snapshotDir, "config.sha256")
+	fingerprint := configFingerprint(cfg, mediaFiles)
+	if prev, err := os.ReadFile(fingerprintPath); err != nil || strings.TrimSpace(string(prev)) != fingerprint {
+		// Settings that every page's meta depends on changed (or the engine
+		// did, or the set of media files): reuse nothing from the previous run.
+		oldSnapshot = map[string]models.SnapshotEntry{}
 	}
 
 	current := map[string]s3util.Object{}
@@ -262,7 +269,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		lastModified := effectiveLastModified(metaMap, lm)
 		metaEntry := buildMetaEntry(metaMap, core, content, metaOpts, pathVal, key, cfg.S3.Prefix, lastModified)
 		routeEntry := buildRouteEntry(metaMap, metaEntry, key, obj.ETag, lastModified, pathVal)
-		mediaKeys := extractMediaKeysFromContent(string(content), key, cfg.S3.Prefix)
+		mediaKeys := extractMediaKeysFromContent(string(content), key, cfg.S3.Prefix, metaOpts.Finder)
 		if len(mediaKeys) > 0 {
 			newIndex.Media[pathVal] = mediaKeys
 		}
@@ -298,6 +305,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 
+	newIndex.MediaFiles = mediaFiles
 	newIndex.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
 
 	if err := writeAtomicJSON(resolvePath, newIndex); err != nil {
@@ -501,7 +509,7 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 	if fmImage != "" {
 		imageURL = resolveImageURLFromHref(fmImage, s3Key, prefix, site.MediaBaseURL, site.BaseURL)
 	} else if len(content) > 0 {
-		imageURL, imageAlt = resolveImageURLFromContentWithAlt(string(content), s3Key, prefix, site.MediaBaseURL, site.BaseURL)
+		imageURL, imageAlt = resolveImageURLFromContentWithAlt(string(content), s3Key, prefix, site.MediaBaseURL, site.BaseURL, opts.Finder)
 	}
 	if imageURL == "" && site.DefaultOGImage != "" {
 		imageURL = resolveImageURLFromHref(site.DefaultOGImage, s3Key, prefix, site.MediaBaseURL, site.BaseURL)
@@ -1246,20 +1254,32 @@ func typeAllowed(value string, allowed []string) bool {
 }
 
 func resolveImageURLFromContent(markdown, s3Key, prefix, mediaBase, baseURL string) string {
-	url, _ := resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL)
+	url, _ := resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL, nil)
 	return url
 }
 
-func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL string) (string, string) {
-	href, alt := extractFirstImageWithAlt(markdown)
+func resolveImageURLFromContentWithAlt(markdown, s3Key, prefix, mediaBase, baseURL string, finder *mediautil.Finder) (string, string) {
+	href, alt, embed := extractFirstImage(markdown)
 	if href == "" {
 		return "", ""
+	}
+	if embed {
+		if key, ok := finder.Find(href, s3Key, prefix); ok {
+			href = "/media/" + key
+		}
 	}
 	url := resolveImageURLFromHref(href, s3Key, prefix, mediaBase, baseURL)
 	return url, alt
 }
 
 func extractFirstImageWithAlt(markdown string) (string, string) {
+	href, alt, _ := extractFirstImage(markdown)
+	return href, alt
+}
+
+// extractFirstImage also says whether the image is an Obsidian embed: only an
+// embed is looked up by file name across the vault.
+func extractFirstImage(markdown string) (string, string, bool) {
 	markdown = mdproc.MaskCodeWithSpaces(markdown)
 	for _, m := range embedImageRe.FindAllStringSubmatch(markdown, -1) {
 		if len(m) < 2 {
@@ -1270,7 +1290,7 @@ func extractFirstImageWithAlt(markdown string) (string, string) {
 		if !isMediaTarget(target) {
 			continue
 		}
-		return target, alt
+		return target, alt, true
 	}
 	for _, m := range mdImageRe.FindAllStringSubmatch(markdown, -1) {
 		if len(m) < 3 {
@@ -1280,9 +1300,9 @@ func extractFirstImageWithAlt(markdown string) (string, string) {
 		if !isMediaTarget(target) {
 			continue
 		}
-		return target, strings.TrimSpace(m[1])
+		return target, strings.TrimSpace(m[1]), false
 	}
-	return "", ""
+	return "", "", false
 }
 
 func parseEmbedTarget(inner string) (string, string) {
@@ -1306,7 +1326,11 @@ func resolveImageURLFromHref(href, s3Key, prefix, mediaBase, baseURL string) str
 	return mediautil.ResolveMediaAbsolute(href, s3Key, prefix, mediaBase, baseURL)
 }
 
-func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
+func extractMediaKeysFromContent(markdown, baseKey, prefix string, finders ...*mediautil.Finder) []string {
+	var finder *mediautil.Finder
+	if len(finders) > 0 {
+		finder = finders[0]
+	}
 	markdown = mdproc.MaskCodeWithSpaces(markdown)
 	keys := map[string]struct{}{}
 	addKey := func(key string) {
@@ -1334,6 +1358,10 @@ func extractMediaKeysFromContent(markdown, baseKey, prefix string) []string {
 		target, _ := parseEmbedTarget(match[1])
 		target = linkutil.StripWikiAnchor(target)
 		if !isMediaTarget(target) {
+			continue
+		}
+		if key, ok := finder.Find(target, baseKey, ""); ok {
+			addKey(key)
 			continue
 		}
 		if key := resolveMediaKey(target, baseDir, prefix); key != "" {

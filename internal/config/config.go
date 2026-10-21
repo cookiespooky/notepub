@@ -142,6 +142,10 @@ type ServerConfig struct {
 
 type MediaConfig struct {
 	ExposeAllUnderPrefix bool `yaml:"expose_all_under_prefix"`
+	// Dirs are local folders, besides the content folder, whose files the
+	// build publishes under /media/ (a vault's media/ folder). Embeds find
+	// files there by name, as Obsidian does.
+	Dirs []string `yaml:"dirs"`
 }
 
 func Load(path string) (Config, error) {
@@ -204,6 +208,15 @@ func Load(path string) (Config, error) {
 			cfg.Content.LocalDir = filepath.Join(filepath.Dir(path), cfg.Content.LocalDir)
 		}
 		cfg.Content.LocalDir = filepath.Clean(cfg.Content.LocalDir)
+	}
+	for i, dir := range cfg.Media.Dirs {
+		if strings.TrimSpace(dir) == "" {
+			continue
+		}
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(filepath.Dir(path), dir)
+		}
+		cfg.Media.Dirs[i] = filepath.Clean(dir)
 	}
 	if cfg.Site.BaseURL == "" {
 		return Config{}, fmt.Errorf("site.base_url is required")

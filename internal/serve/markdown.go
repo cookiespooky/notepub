@@ -34,7 +34,11 @@ var (
 	mdLinkPattern = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
 )
 
-func normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase string) string {
+func normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase string, finders ...*mediautil.Finder) string {
+	var finder *mediautil.Finder
+	if len(finders) > 0 {
+		finder = finders[0]
+	}
 	markdown = mdproc.NormalizeLineEndings(markdown)
 	markdown = stripFrontmatter(markdown)
 
@@ -50,6 +54,12 @@ func normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase string) string
 			}
 			pathPart, alt := splitEmbed(inner)
 			pathPart = linkutil.StripWikiAnchor(pathPart)
+			// An embed names a file the way Obsidian does: by name, anywhere in the vault.
+			if (isImageTarget(pathPart) || isVideoTarget(pathPart)) && finder != nil {
+				if key, ok := finder.Find(pathPart, baseKey, prefix); ok {
+					pathPart = "/media/" + key
+				}
+			}
 			if isImageTarget(pathPart) {
 				resolved := mediautil.ResolveMediaLink(pathPart, baseKey, prefix, mediaBase)
 				return "![" + alt + "](" + resolved + ")"
@@ -79,8 +89,8 @@ func normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase string) string
 	})
 }
 
-func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string) string {
-	return normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase)
+func normalizeMarkdownImagesForBuild(markdown, baseKey, prefix, mediaBase string, finder *mediautil.Finder) string {
+	return normalizeMarkdownImages(markdown, baseKey, prefix, mediaBase, finder)
 }
 
 func normalizeMarkdownLinks(markdown string, wikiMap map[string]string, baseURL string) string {

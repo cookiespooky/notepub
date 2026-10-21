@@ -21,8 +21,15 @@ All notable changes to this project are documented in this file.
   frontmatter gives.
 - `template check` reports whether pages are dated by commits and whether the build runs the SEO check.
 
+- Obsidian embeds find their file the way Obsidian does: next to the note, then from the content root,
+  then by file name anywhere (the shortest path wins). `media.dirs` adds folders the build publishes
+  under `/media/` besides the content folder (a vault's `media/`). `validate --markdown` reports
+  `NP-MD-EMBED-MISSING` for an embedded file that exists nowhere.
+
 ### Fixed
 
+- `![[photo.jpg]]` in a note under `works/` pointed at `/media/works/photo.jpg` even when the file lay in
+  another folder, as Obsidian allows: the page showed a broken image and the page's `og:image` was wrong.
 - `<lastmod>` in the sitemap was the file time, and a CI checkout gives every file the same one: every
   page claimed to have changed on the day of each deploy. The note's `updated` (`lastmod`, `modified`)
   now wins, and the template build script (`template update`) dates notes by their last git commit in CI

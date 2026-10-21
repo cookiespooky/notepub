@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/cookiespooky/notepub/internal/config"
 	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
 	"github.com/cookiespooky/notepub/internal/s3util"
@@ -357,7 +358,7 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if markdown != "" {
-			if htmlBody, renderErr := s.renderMarkdown(markdown, route.S3Key, wikiMap); renderErr == nil {
+			if htmlBody, renderErr := s.renderMarkdown(markdown, route.S3Key, wikiMap, idx.MediaFiles); renderErr == nil {
 				body = htmlBody
 			}
 		}
@@ -496,7 +497,7 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 		markdown = body
 	}
 
-	htmlBody, err := s.renderMarkdown(markdown, route.S3Key, wikiMap)
+	htmlBody, err := s.renderMarkdown(markdown, route.S3Key, wikiMap, idx.MediaFiles)
 	if err != nil {
 		s.serveStaleOr503(w, r, pathVal)
 		return
@@ -505,8 +506,8 @@ func (s *Server) handlePage(w http.ResponseWriter, r *http.Request) {
 	s.writePage(w, pathVal, idx, route, htmlBody, "miss", false)
 }
 
-func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[string]string) (string, error) {
-	markdown = normalizeMarkdownImages(markdown, baseKey, s.cfg.S3.Prefix, s.cfg.Site.MediaBaseURL)
+func (s *Server) renderMarkdown(markdown string, baseKey string, wikiMap map[string]string, mediaFiles []string) (string, error) {
+	markdown = normalizeMarkdownImages(markdown, baseKey, s.cfg.S3.Prefix, s.cfg.Site.MediaBaseURL, mediautil.NewFinder(mediaFiles))
 	markdown = normalizeMarkdownLinks(markdown, wikiMap, s.cfg.Site.BaseURL)
 	var buf strings.Builder
 	if err := s.md.Convert([]byte(markdown), &buf); err != nil {

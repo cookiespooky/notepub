@@ -14,6 +14,9 @@ type ResolveIndex struct {
 	Links       map[string]map[string][]string `json:"links,omitempty"`
 	LinkTargets map[string]map[string][]string `json:"link_targets,omitempty"`
 	Media       map[string][]string            `json:"media,omitempty"`
+	// MediaFiles are all files published under /media/ (keys without the
+	// prefix), so an embed can be found by name, as Obsidian finds it.
+	MediaFiles []string `json:"media_files,omitempty"`
 }
 
 type RouteEntry struct {

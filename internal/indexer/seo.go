@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/cookiespooky/notepub/internal/config"
+	"github.com/cookiespooky/notepub/internal/localutil"
+	"github.com/cookiespooky/notepub/internal/mediautil"
 	"github.com/cookiespooky/notepub/internal/models"
+	"github.com/cookiespooky/notepub/internal/s3util"
 )
 
 // metaFormatVersion is part of the config fingerprint: bump it whenever
@@ -28,6 +31,7 @@ type metaOptions struct {
 	Site         config.SiteConfig
 	OGTypeByType map[string]string
 	SEO          config.SEOConfig
+	Finder       *mediautil.Finder
 }
 
 func metaOptionsFromConfig(cfg config.Config) metaOptions {
@@ -225,7 +229,7 @@ func truncateRunes(s string, max int) string {
 // config or the rules changes. An incremental index reuses meta only for files
 // that did not change, so without this a new base_url or language would keep
 // the old canonical and og:url on every page that was not edited.
-func configFingerprint(cfg config.Config) string {
+func configFingerprint(cfg config.Config, mediaFiles []string) string {
 	rulesBytes, _ := os.ReadFile(cfg.RulesPath)
 	payload, _ := json.Marshal(struct {
 		Version int
@@ -234,7 +238,53 @@ func configFingerprint(cfg config.Config) string {
 		SEO     config.SEOConfig
 		Prefix  string
 		Rules   string
-	}{metaFormatVersion, cfg.Site, cfg.OGTypeByType, cfg.SEO, cfg.S3.Prefix, string(rulesBytes)})
+		Media   []string
+	}{metaFormatVersion, cfg.Site, cfg.OGTypeByType, cfg.SEO, cfg.S3.Prefix, string(rulesBytes), mediaFiles})
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
+}
+
+// listMediaFiles collects every file the build publishes under /media/: what
+// is not a note in the content folder (or bucket), and the files of media.dirs.
+func listMediaFiles(cfg config.Config, objects []s3util.Object) ([]string, error) {
+	seen := map[string]bool{}
+	add := func(key string) {
+		key = strings.TrimPrefix(key, "/")
+		if key != "" {
+			seen[key] = true
+		}
+	}
+	prefix := strings.TrimPrefix(cfg.S3.Prefix, "/")
+	switch cfg.Content.Source {
+	case "local":
+		files, err := localutil.ListMediaFiles(cfg.Content.LocalDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range files {
+			add(strings.TrimPrefix(f, prefix))
+		}
+	case "s3":
+		for _, obj := range objects {
+			if strings.HasSuffix(strings.ToLower(obj.Key), ".md") {
+				continue
+			}
+			add(strings.TrimPrefix(obj.Key, prefix))
+		}
+	}
+	for _, dir := range cfg.Media.Dirs {
+		files, err := localutil.ListMediaFiles(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range files {
+			add(f)
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out, nil
 }
