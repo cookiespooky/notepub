@@ -378,3 +378,7 @@ files for static consumption.
 ## Contact
 
 Telegram: [cookiespooky](https://t.me/cookiespooky)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
