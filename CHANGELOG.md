@@ -16,6 +16,9 @@ All notable changes to this project are documented in this file.
 - RSS 2.0 feed (`feed.enabled`, `types`, `limit`, `path`), written by `build` and served by `serve`;
   `.FeedURL` in templates. Its bytes depend only on content.
 - `site.language`, the same value as the `site_language` setting.
+- Template functions `humanDate` (`{{ humanDate .Meta.Published "ru" }}` → «4 марта 2025», English
+  otherwise) and `isoDate` (`2025-03-04`, for `<time datetime>`). They accept the strings and dates
+  frontmatter gives.
 - `template check` reports whether pages are dated by commits and whether the build runs the SEO check.
 
 ### Fixed

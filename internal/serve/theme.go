@@ -251,7 +251,7 @@ func parseTemplatesDir(dir string) (*template.Template, error) {
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no templates found in %s", dir)
 	}
-	return template.ParseFiles(files...)
+	return template.New(filepath.Base(files[0])).Funcs(templateFuncs()).ParseFiles(files...)
 }
 
 func parseTemplatesFS(fsRoot fs.FS, subdir string) (*template.Template, error) {
@@ -259,7 +259,7 @@ func parseTemplatesFS(fsRoot fs.FS, subdir string) (*template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	return template.ParseFS(fsDir, "*.html", "partials/*.html")
+	return template.New("layout.html").Funcs(templateFuncs()).ParseFS(fsDir, "*.html", "partials/*.html")
 }
 
 func templateExists(t *template.Template, name string) bool {
