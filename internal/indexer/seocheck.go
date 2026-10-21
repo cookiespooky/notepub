@@ -154,8 +154,11 @@ func CheckSEO(idx models.ResolveIndex, cfg config.Config, rulesCfg rules.Rules) 
 				fromNotes = true
 			}
 		}
+		// Information, not a warning: a site made from a template is one commit,
+		// and then every page did change on the same day.
 		if len(days) == 1 && !fromNotes {
-			warn("lastmod-uniform", "", "every page has the same lastmod: in CI, restore file times from git (fetch-depth: 0) or set `updated` in notes")
+			diags = append(diags, SEODiagnostic{Code: "lastmod-uniform", Severity: "info",
+				Message: "every page has the same lastmod: if this is not a new site, date files by git in CI (fetch-depth: 0) or set `updated` in notes"})
 		}
 	}
 

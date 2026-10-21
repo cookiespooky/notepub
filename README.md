@@ -232,7 +232,7 @@ feed:
   limit: 20
 ```
 
-`validate --seo` reads `resolve.json` and reports what costs a page its place in results and can be fixed in the note: a missing, long (over 70 characters) or repeated title; a missing, short (under 50) or long (over 200) description, or one repeated on another page; a page no note links to and that links to no note (information only: the theme's menu is not seen); `robots-under-path`, when the site lives under a path such as `/docs/`, where crawlers never read its `robots.txt`; `lastmod-uniform`, when every page has the same date and no note sets one. `--seo-strict` fails on warnings, `--seo-format json` prints JSON.
+`validate --seo` reads `resolve.json` and reports what costs a page its place in results and can be fixed in the note: a missing, long (over 70 characters) or repeated title; a missing, short (under 50) or long (over 200) description, or one repeated on another page; a page no note links to and that links to no note (information only: the theme's menu is not seen); `robots-under-path`, when the site lives under a path such as `/docs/`, where crawlers never read its `robots.txt`; `lastmod-uniform` (information), when every page has the same date and no note sets one. `--seo-strict` fails on warnings, `--seo-format json` prints JSON.
 
 ## Release binaries
 
