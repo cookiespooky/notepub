@@ -46,6 +46,17 @@ type MetaEntry struct {
 	Category    *CategoryModel         `json:"category,omitempty"`
 	Image       string                 `json:"image,omitempty"`
 	FM          map[string]interface{} `json:"fm,omitempty"`
+
+	// SEOTitle is the <title> a theme should print; it falls back to Title.
+	SEOTitle   string      `json:"seo_title,omitempty"`
+	Alternates []Alternate `json:"alternates,omitempty"`
+	Published  string      `json:"published,omitempty"`
+}
+
+// Alternate is one language version of a page, for <link rel="alternate" hreflang>.
+type Alternate struct {
+	Lang string `json:"lang"`
+	URL  string `json:"url"`
 }
 
 type CategoryModel struct {

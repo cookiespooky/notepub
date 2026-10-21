@@ -8,6 +8,7 @@ site:
   default_og_image: ""
   media_base_url: "https://cookiespooky.github.io/notepub/media/" # production media
   host: 127.0.0.1
+  language: "ru" # language of schema.org markup and the feed; same as settings.site_language
 
 runtime:
   mode: "dev" # dev|prod
@@ -31,6 +32,14 @@ content:
 markdown:
   # safe (default), unsafe, deny
   html_policy: "safe"
+
+seo:
+  jsonld: "off" # "auto": schema.org markup for pages without their own jsonld
+  author_name: ""
+
+feed:
+  enabled: false # true: RSS at /feed.xml with the newest pages of article types
+  limit: 20
 
 og_type_by_type:
   article: "article"

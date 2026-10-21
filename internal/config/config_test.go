@@ -492,3 +492,32 @@ content:
 		t.Fatalf("site title = %q, want From Note", cfg.Site.Title)
 	}
 }
+
+func TestSiteLanguageFromSettingsOrSite(t *testing.T) {
+	cases := []struct {
+		name, yaml, want string
+	}{
+		{"setting", "site:\n  base_url: https://ex.com\nsettings:\n  site_language: ru\n", "ru"},
+		{"site", "site:\n  base_url: https://ex.com\n  language: de\n", "de"},
+		{"default", "site:\n  base_url: https://ex.com\n", "en"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.yaml")
+			if err := os.WriteFile(path, []byte(c.yaml), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Site.Language != c.want || cfg.Settings["site_language"] != c.want {
+				t.Errorf("site.language = %q, site_language = %q, want %q", cfg.Site.Language, cfg.Settings["site_language"], c.want)
+			}
+			if cfg.Feed.Path != "feed.xml" || cfg.Feed.Limit != 20 {
+				t.Errorf("умолчания ленты: %+v", cfg.Feed)
+			}
+		})
+	}
+}

@@ -15,8 +15,8 @@ This repository is the engine core and includes:
 
 For up-to-date user documentation, use:
 
-- RU: https://cookiespooky.github.io/np/ru/docs/
-- EN: https://cookiespooky.github.io/np/en/docs/
+- RU: https://antonlozhkin.ru/np/ru/docs/
+- EN: https://antonlozhkin.ru/np/en/docs/
 
 ## Quick smoke run
 
@@ -59,6 +59,7 @@ notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --res
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --markdown --markdown-strict
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --markdown --markdown-format json
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --markdown --markdown-format json --output ./artifacts/markdown-diagnostics.json
+notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --seo
 ```
 
 ## Template updates
@@ -204,6 +205,35 @@ Write diagnostics to file:
 notepub validate --resolve ./artifacts/resolve.json --markdown --markdown-format json --output ./artifacts/markdown-diagnostics.json
 ```
 
+## SEO
+
+What the engine writes for every page, without a template having to:
+
+- `<title>`: themes print `.Meta.Title` — the note's `seo_title`, else its `title`. `title` stays the heading on the page.
+- canonical URL (`canonical` in frontmatter overrides it), robots meta (`noindex: true` or `robots: "…"`).
+- OpenGraph: title (`og_title` → `seo_title` → `title`), description (`og_description` → `description` → the start of the text), url, type (`og_type`, else `og_type_by_type`), image (`og_image` → first image in the text → `site.default_og_image`) with its alt text.
+- `sitemap.xml` (split every 50 000 URLs) without `noindex` pages, redirects and drafts. A page's `<lastmod>` is the note's `updated` (also `lastmod`, `modified`, `date_modified`), else the file time. Template build scripts date files by their last git commit in CI, so a fresh checkout does not mark every page as changed today.
+- `robots.txt` with `robots.disallow` and `robots.extra`.
+- redirects: `redirect_to` in a note answers 301 in `serve` and writes a page with an instant redirect and a canonical in `build`.
+- language versions: `alternates: {en: /en/page/, ru: /ru/page/, x-default: /en/page/}` becomes `.Meta.Alternates` (absolute URLs, `x-default` last) for `<link rel="alternate" hreflang>`.
+- schema.org: `jsonld` in a note is printed as is. With `seo.jsonld: auto` the engine writes WebSite and WebPage for every other indexable page, Article for article types (`seo.article_types`, else the types `og_type_by_type` maps to `article`; with `datePublished` from `date`, `dateModified`, `author` from the note or `seo.author_name`), and the type a note names in `schema_type` (`Service`, `FAQPage`, `Person`…) as the main entity. Off by default, so themes that write their own markup are not doubled.
+- RSS: `feed.enabled: true` writes `feed.xml` (`feed.path`) with the newest `feed.limit` pages of `feed.types`; themes link it through `.FeedURL`.
+- `site.language` (or the `site_language` setting) is the language of markup and feed.
+
+```yaml
+site:
+  language: "ru"
+seo:
+  jsonld: "auto"          # off by default
+  author_name: "Anna"     # default author of Article markup
+feed:
+  enabled: true
+  types: ["post"]         # default: article types
+  limit: 20
+```
+
+`validate --seo` reads `resolve.json` and reports what costs a page its place in results and can be fixed in the note: a missing, long (over 70 characters) or repeated title; a missing, short (under 50) or long (over 200) description, or one repeated on another page; a page no note links to and that links to no note (information only: the theme's menu is not seen); `robots-under-path`, when the site lives under a path such as `/docs/`, where crawlers never read its `robots.txt`; `lastmod-uniform`, when every page has the same date and no note sets one. `--seo-strict` fails on warnings, `--seo-format json` prints JSON.
+
 ## Release binaries
 
 GitHub Release publishes cross-platform binaries from `.github/workflows/release.yml`:
@@ -219,7 +249,7 @@ GitHub Release publishes cross-platform binaries from `.github/workflows/release
 Usage example (Linux amd64):
 
 ```bash
-NOTEPUB_VERSION=v0.1.1
+NOTEPUB_VERSION=v0.1.9
 curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_linux_amd64
 chmod +x notepub
 ./notepub validate --config ./config.yaml --rules ./rules.yaml
@@ -229,7 +259,7 @@ chmod +x notepub
 macOS Apple Silicon:
 
 ```bash
-NOTEPUB_VERSION=v0.1.1
+NOTEPUB_VERSION=v0.1.9
 curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_darwin_arm64
 chmod +x notepub
 ./notepub version
@@ -238,7 +268,7 @@ chmod +x notepub
 Windows PowerShell:
 
 ```powershell
-$env:NOTEPUB_VERSION="v0.1.1"
+$env:NOTEPUB_VERSION="v0.1.9"
 Invoke-WebRequest -Uri "https://github.com/cookiespooky/notepub/releases/download/$env:NOTEPUB_VERSION/notepub_windows_amd64.exe" -OutFile ".\notepub.exe"
 .\notepub.exe version
 ```

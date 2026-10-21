@@ -62,6 +62,14 @@ func Run(ctx context.Context, cfg config.Config) error {
 
 	oldIndex, _ := loadResolve(resolvePath)
 	oldSnapshot, _ := loadSnapshot(snapshotPath)
+	metaOpts := metaOptionsFromConfig(cfg)
+	fingerprintPath := filepath.Join(snapshotDir, "config.sha256")
+	fingerprint := configFingerprint(cfg)
+	if prev, err := os.ReadFile(fingerprintPath); err != nil || strings.TrimSpace(string(prev)) != fingerprint {
+		// Settings that every page's meta depends on changed (or the engine
+		// did): reuse nothing from the previous run.
+		oldSnapshot = map[string]models.SnapshotEntry{}
+	}
 
 	if oldIndex.Routes == nil {
 		oldIndex.Routes = map[string]models.RouteEntry{}
@@ -167,7 +175,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 						errors = append(errors, fmt.Sprintf("%s: %s", key, err))
 						continue
 					}
-					route.LastModified = lm
+					route.LastModified = effectiveLastModified(meta.FM, lm)
 					newIndex.Meta[p] = meta
 					newIndex.Routes[p] = route
 					if oldIndex.LinkTargets != nil {
@@ -251,8 +259,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 		usedPaths[pathVal] = true
 		typeCounts[core.Type]++
 
-		metaEntry := buildMetaEntry(metaMap, core, content, cfg.Site, cfg.OGTypeByType, pathVal, key, cfg.S3.Prefix)
-		routeEntry := buildRouteEntry(metaMap, metaEntry, key, obj.ETag, lm, pathVal)
+		lastModified := effectiveLastModified(metaMap, lm)
+		metaEntry := buildMetaEntry(metaMap, core, content, metaOpts, pathVal, key, cfg.S3.Prefix, lastModified)
+		routeEntry := buildRouteEntry(metaMap, metaEntry, key, obj.ETag, lastModified, pathVal)
 		mediaKeys := extractMediaKeysFromContent(string(content), key, cfg.S3.Prefix)
 		if len(mediaKeys) > 0 {
 			newIndex.Media[pathVal] = mediaKeys
@@ -296,6 +305,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	if err := writeAtomicJSON(snapshotPath, newSnapshot); err != nil {
 		return fmt.Errorf("write snapshot: %w", err)
+	}
+	if err := os.WriteFile(fingerprintPath, []byte(fingerprint+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write config fingerprint: %w", err)
 	}
 	if err := writeSitemaps(artifactsDir, cfg.Site.BaseURL, newIndex, rulesCfg); err != nil {
 		return fmt.Errorf("write sitemap: %w", err)
@@ -437,7 +449,9 @@ func filenameBase(key string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte, site config.SiteConfig, ogTypeByType map[string]string, pathVal, s3Key, prefix string) models.MetaEntry {
+func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte, opts metaOptions, pathVal, s3Key, prefix, lastModified string) models.MetaEntry {
+	site := opts.Site
+	ogTypeByType := opts.OGTypeByType
 	canonical := stringFromMeta(meta, "canonical")
 	if canonical == "" {
 		canonical = buildAbsoluteURL(site.BaseURL, urlutil.PublicPath(pathVal))
@@ -461,8 +475,10 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 		og = map[string]string{}
 	}
 
+	seoTitle := strings.TrimSpace(stringFromMeta(meta, "seo_title"))
 	ogTitle := firstNonEmpty(
 		stringFromMeta(meta, "og_title"),
+		seoTitle,
 		stringFromMeta(meta, "title"),
 		site.Title,
 	)
@@ -502,7 +518,7 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 		}
 	}
 
-	return models.MetaEntry{
+	entry := models.MetaEntry{
 		Type:        core.Type,
 		Slug:        core.Slug,
 		Title:       core.Title,
@@ -513,7 +529,16 @@ func buildMetaEntry(meta map[string]interface{}, core coreFields, content []byte
 		JSONLD:      jsonld,
 		Image:       imageURL,
 		FM:          meta,
+		SEOTitle:    firstNonEmpty(seoTitle, core.Title),
+		Alternates:  buildAlternates(meta, site.BaseURL),
 	}
+	if t, ok := fmTime(meta, publishedKeys...); ok {
+		entry.Published = t.Format(time.RFC3339)
+	}
+	if len(entry.JSONLD) == 0 && opts.SEO.JSONLD == "auto" && !noindex {
+		entry.JSONLD = buildAutoJSONLD(entry, meta, pathVal, lastModified, opts)
+	}
+	return entry
 }
 
 func buildRouteEntry(meta map[string]interface{}, metaEntry models.MetaEntry, s3Key, etag, lastModified, pathVal string) models.RouteEntry {

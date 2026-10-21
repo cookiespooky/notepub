@@ -365,12 +365,50 @@ func validateCmd(args []string) error {
 				return fmt.Errorf("markdown validation strict failed (%d warnings)", warnCount)
 			}
 		}
+		if *validateSEOFlags.enabled {
+			if err := runSEOCheck(idx, cfg, rulesCfg); err != nil {
+				return err
+			}
+		}
 	} else if *validateLinks {
 		return fmt.Errorf("link validation: resolve.json not found (use --resolve)")
+	} else if *validateSEOFlags.enabled {
+		return fmt.Errorf("seo validation: resolve.json not found (use --resolve or run index)")
 	} else if *validateMarkdown {
 		return fmt.Errorf("markdown validation: resolve.json not found (use --resolve or run index)")
 	}
 	log.Println("validate completed")
+	return nil
+}
+
+func runSEOCheck(idx models.ResolveIndex, cfg config.Config, rulesCfg rules.Rules) error {
+	diags := indexer.CheckSEO(idx, cfg, rulesCfg)
+	switch strings.ToLower(strings.TrimSpace(*validateSEOFlags.format)) {
+	case "", "text":
+		for _, d := range diags {
+			where := d.Path
+			if where == "" {
+				where = "(site)"
+			}
+			fmt.Fprintf(os.Stdout, "[%s] %s %s %s\n", strings.ToUpper(d.Severity), d.Code, where, d.Message)
+		}
+	case "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(struct {
+			Diagnostics []indexer.SEODiagnostic `json:"diagnostics"`
+			Warnings    int                     `json:"warnings"`
+		}{diags, indexer.CountSEODiagnostics(diags)}); err != nil {
+			return fmt.Errorf("seo validation output: %w", err)
+		}
+	default:
+		return fmt.Errorf("seo validation: unsupported format %q (use text or json)", *validateSEOFlags.format)
+	}
+	warnings := indexer.CountSEODiagnostics(diags)
+	log.Printf("seo validation: %d warning(s)", warnings)
+	if *validateSEOFlags.strict && warnings > 0 {
+		return fmt.Errorf("seo validation strict failed (%d warnings)", warnings)
+	}
 	return nil
 }
 
@@ -518,6 +556,16 @@ func newBuildFlagSet() (*flag.FlagSet, *string, *string, *string, *string, *bool
 	return fs, configPath, rulesPath, distDir, artifactsDir, noIndex, generateSearch
 }
 
+// seoFlags are the validate flags of the SEO check, kept apart so the long
+// return list of newValidateFlagSet does not grow again.
+type seoFlags struct {
+	enabled *bool
+	strict  *bool
+	format  *string
+}
+
+var validateSEOFlags seoFlags
+
 func newValidateFlagSet() (*flag.FlagSet, *string, *string, *string, *bool, *bool, *bool, *string, *string) {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 	configPath := fs.String("config", "", "Path to config.yaml")
@@ -528,6 +576,11 @@ func newValidateFlagSet() (*flag.FlagSet, *string, *string, *string, *bool, *boo
 	markdownStrict := fs.Bool("markdown-strict", false, "Fail on markdown warnings as well as errors")
 	markdownFormat := fs.String("markdown-format", "text", "Markdown diagnostics output format: text|json")
 	markdownOutput := fs.String("output", "", "Write markdown diagnostics output to file path")
+	validateSEOFlags = seoFlags{
+		enabled: fs.Bool("seo", false, "Check titles, descriptions, isolated pages, robots and lastmod for search engines"),
+		strict:  fs.Bool("seo-strict", false, "Fail when the SEO check finds warnings"),
+		format:  fs.String("seo-format", "text", "SEO findings output format: text|json"),
+	}
 	return fs, configPath, rulesPath, resolvePath, validateLinks, validateMarkdown, markdownStrict, markdownFormat, markdownOutput
 }
 

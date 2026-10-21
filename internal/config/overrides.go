@@ -125,6 +125,9 @@ func applySiteNote(cfg *Config, props map[string]string) {
 	if v := strings.TrimSpace(props["site_default_og_image"]); v != "" {
 		cfg.Site.DefaultOGImage = v
 	}
+	if v := strings.TrimSpace(props["site_language"]); v != "" {
+		cfg.Site.Language = v
+	}
 }
 
 func applyInterfaceNote(cfg *Config, props map[string]string) {
@@ -146,6 +149,9 @@ func applySettingsOverrides(cfg *Config) {
 	if v := strings.TrimSpace(cfg.Settings["site_default_og_image"]); v != "" {
 		cfg.Site.DefaultOGImage = v
 	}
+	if v := strings.TrimSpace(cfg.Settings["site_language"]); v != "" {
+		cfg.Site.Language = v
+	}
 }
 
 func mergeSettings(cfg *Config, props map[string]string) {
@@ -163,7 +169,16 @@ func finalizeSettings(cfg *Config) {
 	setDefault(cfg.Settings, "site_title", cfg.Site.Title)
 	setDefault(cfg.Settings, "site_description", cfg.Site.Description)
 	cfg.Settings["site_url"] = cfg.Site.BaseURL
-	setDefault(cfg.Settings, "site_language", "en")
+	// site.language and the site_language setting are one value: either may set it.
+	lang := strings.TrimSpace(cfg.Settings["site_language"])
+	if lang == "" {
+		lang = strings.TrimSpace(cfg.Site.Language)
+	}
+	if lang == "" {
+		lang = "en"
+	}
+	cfg.Settings["site_language"] = lang
+	cfg.Site.Language = lang
 	setDefault(cfg.Settings, "site_default_og_image", cfg.Site.DefaultOGImage)
 	cfg.Settings["site_default_og_image"] = resolveAssetOrMediaURL(cfg.Settings["site_default_og_image"], cfg.Site.BaseURL, cfg.Site.MediaBaseURL)
 }

@@ -479,6 +479,16 @@ func checks(root string, layout projectLayout) []string {
 	} else {
 		items = append(items, "GitHub Pages base URL is not passed to build")
 	}
+	if fileContains(workflowPath, "fetch-depth: 0") && fileContains(buildPath, "restore_git_dates") {
+		items = append(items, "pages are dated by their last commit")
+	} else {
+		items = append(items, "pages are dated by checkout time (run template update)")
+	}
+	if fileContains(buildPath, "--seo") {
+		items = append(items, "build runs the SEO check")
+	} else {
+		items = append(items, "build does not run the SEO check (run template update)")
+	}
 	return items
 }
 
@@ -1107,6 +1117,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: build.sh dates every page by its last commit.
+          fetch-depth: 0
 
       - name: Resolve content source config
         id: source
@@ -1446,8 +1459,60 @@ if [[ -z "${NOTEPUB_BASE_URL:-}" && "${GITHUB_ACTIONS:-}" == "true" ]]; then
   fi
 fi
 
+# GitHub reports http:// for a custom domain until HTTPS is enforced; the
+# public site answers on https, and canonical URLs must name that address.
+if [[ "${GITHUB_ACTIONS:-}" == "true" && "${NOTEPUB_BASE_URL:-}" == http://* ]]; then
+  case "$NOTEPUB_BASE_URL" in
+    http://127.0.0.1*|http://localhost*) ;;
+    *) export NOTEPUB_BASE_URL="https://${NOTEPUB_BASE_URL#http://}" ;;
+  esac
+fi
+
 if [[ -n "${NOTEPUB_BASE_URL:-}" && -z "${NOTEPUB_MEDIA_BASE_URL:-}" ]]; then
   export NOTEPUB_MEDIA_BASE_URL="${NOTEPUB_BASE_URL%/}/media/"
+fi
+
+# A fresh checkout gives every file the same time, and the sitemap would say
+# every page changed today. In CI each note gets the time of its last commit.
+restore_git_dates() {
+  python3 - "$ROOT" "$1" <<'GITDATES'
+import os
+import subprocess
+import sys
+
+root, target = sys.argv[1], sys.argv[2]
+if not os.path.isdir(target):
+    raise SystemExit(0)
+rel = os.path.relpath(target, root)
+if rel.startswith(".."):
+    raise SystemExit(0)
+def git(*args):
+    return subprocess.run(["git", "-c", "core.quotePath=false", "-C", root, *args],
+                          capture_output=True, text=True)
+if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+    print("page dates: shallow checkout, set fetch-depth: 0 to date pages by their commits")
+    raise SystemExit(0)
+log = git("log", "--format=@%ct", "--name-only", "--", rel)
+if log.returncode != 0:
+    raise SystemExit(0)
+seen, stamp, count = set(), None, 0
+for line in log.stdout.splitlines():
+    if line.startswith("@"):
+        stamp = int(line[1:])
+        continue
+    if not line or line in seen or stamp is None:
+        continue
+    seen.add(line)
+    path = os.path.join(root, line)
+    if os.path.isfile(path):
+        os.utime(path, (stamp, stamp))
+        count += 1
+print(f"page dates: {count} files dated by their last commit")
+GITDATES
+}
+
+if [[ "${GITHUB_ACTIONS:-}" == "true" || "${NOTEPUB_GIT_DATES:-}" == "1" ]]; then
+  restore_git_dates "$CONTENT_DIR" || echo "page dates: could not read git history; keeping file times"
 fi
 
 echo "[0/9] prepare settings"
@@ -1550,6 +1615,14 @@ if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-markdown"; then
   "$BIN" validate --config "$CFG" --rules "$RULES" --markdown --markdown-format text
 else
   echo "validate --markdown is not supported by this notepub binary; skipping"
+fi
+
+if printf '%s\n' "$VALIDATE_HELP" | grep -q -- "-seo"; then
+  SEO_FLAGS=(--seo)
+  if [[ "${NOTEPUB_SEO_STRICT:-}" == "1" ]]; then
+    SEO_FLAGS+=(--seo-strict)
+  fi
+  "$BIN" validate --config "$CFG" --rules "$RULES" "${SEO_FLAGS[@]}"
 fi
 
 echo "[4/9] build"

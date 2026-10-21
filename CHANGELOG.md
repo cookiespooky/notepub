@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.9 - 2026-10-21
+
+### Added
+
+- `validate --seo`: missing, long and repeated titles and descriptions, pages no note links to, a site
+  under a path whose `robots.txt` crawlers never read, and a sitemap where every page has the same date.
+  `--seo-strict` fails on warnings, `--seo-format json` prints JSON. Template build scripts run it.
+- `seo_title` in a note: the `<title>` (`.Meta.Title`) and `og:title`, while `title` stays the heading.
+- `alternates` in a note: language versions as `.Meta.Alternates`, absolute and sorted, for hreflang.
+- `seo.jsonld: auto`: schema.org markup (WebSite, WebPage, Article, or the note's `schema_type`) for pages
+  without `jsonld` of their own. Off by default.
+- RSS 2.0 feed (`feed.enabled`, `types`, `limit`, `path`), written by `build` and served by `serve`;
+  `.FeedURL` in templates. Its bytes depend only on content.
+- `site.language`, the same value as the `site_language` setting.
+- `template check` reports whether pages are dated by commits and whether the build runs the SEO check.
+
+### Fixed
+
+- `<lastmod>` in the sitemap was the file time, and a CI checkout gives every file the same one: every
+  page claimed to have changed on the day of each deploy. The note's `updated` (`lastmod`, `modified`)
+  now wins, and the template build script (`template update`) dates notes by their last git commit in CI
+  — the workflow checks out the full history for it.
+- An incremental `index` reused the meta of unchanged files even after the config changed, so a new
+  `base_url` left the old canonical and `og:url` on every page that was not edited. The index now starts
+  over when the site settings, OpenGraph types, SEO settings, rules or the engine's meta format change.
+- Pages 2..N of a paginated list carried page 1's `og:url` (the OpenGraph map was shared between routes).
+- Template build scripts turn the `http://` address GitHub reports for a custom domain into `https://`.
+
 ## v0.1.8 - 2026-09-10
 
 ### Added

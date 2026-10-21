@@ -57,6 +57,8 @@ type PageData struct {
 	SearchNextCursor string
 	SearchMode       string
 	Settings         map[string]string
+	// FeedURL is the absolute address of the RSS feed when feed.enabled is set.
+	FeedURL string
 }
 
 type PageInfo struct {
@@ -77,9 +79,13 @@ type CoreFields struct {
 }
 
 type MetaData struct {
-	Robots    string
-	OpenGraph []MetaKV
-	JSONLD    template.JS
+	// Title is what belongs in <title>: the note's seo_title, else its title.
+	Title      string
+	Robots     string
+	OpenGraph  []MetaKV
+	JSONLD     template.JS
+	Alternates []models.Alternate
+	Published  string
 }
 
 type MetaKV struct {

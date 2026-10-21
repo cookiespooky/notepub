@@ -160,6 +160,12 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		}
 	}
 
+	if feed, ok := RenderFeed(idx, cfg, rulesCfg); ok {
+		if err := writeFile(filepath.Join(distDir, filepath.FromSlash(cfg.Feed.Path)), feed); err != nil {
+			return err
+		}
+	}
+
 	notFound, err := theme.RenderNotFound(cfg.Site.BaseURL, cfg.Settings)
 	if err != nil {
 		notFound = "Not Found"

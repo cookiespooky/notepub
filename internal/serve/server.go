@@ -95,6 +95,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleSearch(rec, r)
 	case r.URL.Path == "/search":
 		s.handleSearchPage(rec, r)
+	case s.cfg.Feed.Enabled && r.URL.Path == "/"+s.cfg.Feed.Path:
+		s.handleFeed(rec, r)
 	case r.URL.Path == "/favicon.ico":
 		s.handleFavicon(rec, r)
 	default:
@@ -111,6 +113,22 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Join(s.cfg.Paths.ArtifactsDir, "robots.txt")
 	serveFile(w, r, path, "text/plain")
+}
+
+func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
+	idx, _, err := s.store.GetWithWikiMapContext(r.Context())
+	if err != nil {
+		http.Error(w, "feed unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	feed, ok := RenderFeed(idx, s.cfg, s.rules)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(feed)
 }
 
 func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
@@ -530,9 +548,14 @@ func buildPageData(meta models.MetaEntry, body string, cfg config.Config) PageDa
 		Canonical:  meta.Canonical,
 		BaseURL:    cfg.Site.BaseURL,
 		AssetsBase: urlutil.JoinBaseURL(cfg.Site.BaseURL, "/assets"),
-		Meta:       MetaData{Robots: meta.Robots},
-		Body:       template.HTML(body),
-		Settings:   cloneSettings(cfg.Settings),
+		Meta: MetaData{
+			Title:      firstNonEmptyString(meta.SEOTitle, meta.Title),
+			Robots:     meta.Robots,
+			Alternates: meta.Alternates,
+			Published:  meta.Published,
+		},
+		Body:     template.HTML(body),
+		Settings: cloneSettings(cfg.Settings),
 		Page: PageInfo{
 			Type:        meta.Type,
 			Slug:        meta.Slug,
@@ -567,7 +590,19 @@ func buildPageData(meta models.MetaEntry, body string, cfg config.Config) PageDa
 			data.Meta.JSONLD = template.JS(meta.JSONLD)
 		}
 	}
+	if cfg.Feed.Enabled {
+		data.FeedURL = urlutil.JoinBaseURL(cfg.Site.BaseURL, "/"+cfg.Feed.Path)
+	}
 	return data
+}
+
+func firstNonEmptyString(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (s *Server) templateForType(typeName string) string {

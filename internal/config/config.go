@@ -35,8 +35,32 @@ type Config struct {
 	Cache        CacheConfig       `yaml:"cache"`
 	Server       ServerConfig      `yaml:"server"`
 	Media        MediaConfig       `yaml:"media"`
+	SEO          SEOConfig         `yaml:"seo"`
+	Feed         FeedConfig        `yaml:"feed"`
 	RulesPath    string            `yaml:"rules_path"`
 	Settings     map[string]string `yaml:"settings"`
+}
+
+// SEOConfig holds page-level search settings that are not tied to one template.
+type SEOConfig struct {
+	// JSONLD is "auto" to generate schema.org markup for pages whose
+	// frontmatter has no jsonld of its own; empty or "off" leaves it to the theme.
+	JSONLD string `yaml:"jsonld"`
+	// ArticleTypes lists content types marked up as Article/BlogPosting
+	// when JSONLD is "auto". Defaults to the types og_type_by_type maps to "article".
+	ArticleTypes []string `yaml:"article_types"`
+	// AuthorName is the default author for generated Article markup and the feed.
+	AuthorName string `yaml:"author_name"`
+}
+
+// FeedConfig turns on an RSS 2.0 feed written by build and served by serve.
+type FeedConfig struct {
+	Enabled     bool     `yaml:"enabled"`
+	Types       []string `yaml:"types"`
+	Limit       int      `yaml:"limit"`
+	Path        string   `yaml:"path"`
+	Title       string   `yaml:"title"`
+	Description string   `yaml:"description"`
 }
 
 type SiteConfig struct {
@@ -46,6 +70,7 @@ type SiteConfig struct {
 	Description    string   `yaml:"description"`
 	DefaultOGImage string   `yaml:"default_og_image"`
 	MediaBaseURL   string   `yaml:"media_base_url"`
+	Language       string   `yaml:"language"`
 	Host           string   `yaml:"host"`
 	HostAliases    []string `yaml:"host_aliases"`
 }
@@ -260,6 +285,14 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Runtime.Mode == "" {
 		cfg.Runtime.Mode = "prod"
+	}
+	cfg.SEO.JSONLD = strings.ToLower(strings.TrimSpace(cfg.SEO.JSONLD))
+	if cfg.Feed.Path == "" {
+		cfg.Feed.Path = "feed.xml"
+	}
+	cfg.Feed.Path = strings.TrimLeft(strings.TrimSpace(cfg.Feed.Path), "/")
+	if cfg.Feed.Limit <= 0 {
+		cfg.Feed.Limit = 20
 	}
 }
 

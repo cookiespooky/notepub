@@ -2,9 +2,11 @@ package templateupdate
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLegacyUpdateDryRunDoesNotWrite(t *testing.T) {
@@ -203,4 +205,82 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+func TestModernInfrastructureDatesPagesByCommits(t *testing.T) {
+	wf := modernDeployWorkflow("Deploy", "v0.1.9")
+	if !strings.Contains(wf, "fetch-depth: 0") {
+		t.Error("workflow must fetch full history for page dates")
+	}
+	script := modernBuildScript()
+	for _, want := range []string{"restore_git_dates", "--seo", "https://${NOTEPUB_BASE_URL#http://}"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("build script lacks %q", want)
+		}
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "build.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("bash", "-n", path).CombinedOutput(); err != nil {
+		t.Fatalf("build script is not valid bash: %v\n%s", err, out)
+	}
+}
+
+// The date restorer is a Python program inside the generated bash; run it on a
+// real repository so a quoting slip in the generator shows up here.
+func TestRestoreGitDatesOnRealRepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not installed")
+	}
+	root := t.TempDir()
+	content := filepath.Join(root, "content")
+	os.MkdirAll(content, 0o755)
+	run := func(env []string, args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(), env...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run(nil, "init", "-q")
+	run(nil, "config", "user.email", "t@example.com")
+	run(nil, "config", "user.name", "t")
+	write := func(name string) {
+		if err := os.WriteFile(filepath.Join(content, name), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("старая заметка.md")
+	run(nil, "add", ".")
+	run([]string{"GIT_COMMITTER_DATE=2025-01-02T03:04:05Z", "GIT_AUTHOR_DATE=2025-01-02T03:04:05Z"}, "commit", "-q", "-m", "one")
+	write("new.md")
+	run(nil, "add", ".")
+	run([]string{"GIT_COMMITTER_DATE=2025-06-07T08:09:10Z", "GIT_AUTHOR_DATE=2025-06-07T08:09:10Z"}, "commit", "-q", "-m", "two")
+
+	script := modernBuildScript()
+	start := strings.Index(script, "restore_git_dates() {")
+	end := strings.Index(script[start:], "\n}\n") + start + 3
+	fn := script[start:end]
+	harness := "ROOT=" + root + "\n" + fn + "restore_git_dates " + content + "\n"
+	out, err := exec.Command("bash", "-c", harness).CombinedOutput()
+	if err != nil {
+		t.Fatalf("restore_git_dates: %v\n%s", err, out)
+	}
+	check := func(name string, want time.Time) {
+		info, err := os.Stat(filepath.Join(content, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.ModTime().Equal(want) {
+			t.Errorf("%s: mtime %v, want %v (output: %s)", name, info.ModTime().UTC(), want, out)
+		}
+	}
+	check("старая заметка.md", time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC))
+	check("new.md", time.Date(2025, 6, 7, 8, 9, 10, 0, time.UTC))
 }

@@ -73,6 +73,19 @@ func synthesizePaginatedRoutes(idx *models.ResolveIndex, cfg rules.Rules, baseUR
 				// wikilinks and collection lookups depend on map order.
 				pageMeta.Slug = ""
 				pageMeta.Canonical = buildAbsoluteURL(baseURL, urlutil.PublicPath(pagePath))
+				// The og map is shared with page 1 unless copied, and og:url
+				// must name this page, like the canonical does.
+				og := make(map[string]string, len(meta.OpenGraph))
+				for k, v := range meta.OpenGraph {
+					og[k] = v
+				}
+				og["url"] = pageMeta.Canonical
+				pageMeta.OpenGraph = og
+				// Generated markup describes page 1; markup the note wrote
+				// itself is kept as the author meant it.
+				if len(jsonFromMeta(meta.FM, "jsonld")) == 0 {
+					pageMeta.JSONLD = nil
+				}
 
 				idx.Routes[pagePath] = pageRoute
 				idx.Meta[pagePath] = pageMeta
