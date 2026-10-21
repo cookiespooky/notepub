@@ -55,3 +55,18 @@ func writeTestFile(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+func TestDictFunc(t *testing.T) {
+	tmpl := template.Must(template.New("t").Funcs(templateFuncs()).Parse(
+		`{{ define "x" }}{{ .A }}-{{ .B }}{{ end }}{{ template "x" (dict "A" 1 "B" "два") }}`))
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, nil); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "1-два" {
+		t.Errorf("got %q", buf.String())
+	}
+	if err := template.Must(template.New("bad").Funcs(templateFuncs()).Parse(`{{ dict "A" }}`)).Execute(&buf, nil); err == nil {
+		t.Error("нечётное число аргументов должно быть ошибкой")
+	}
+}

@@ -25,6 +25,21 @@ func templateFuncs() template.FuncMap {
 			}
 			return t.Format("January 2, 2006")
 		},
+		// dict "Root" $ "Item" . — several values for one {{ template }} call.
+		"dict": func(pairs ...interface{}) (map[string]interface{}, error) {
+			if len(pairs)%2 != 0 {
+				return nil, fmt.Errorf("dict: odd number of arguments")
+			}
+			out := make(map[string]interface{}, len(pairs)/2)
+			for i := 0; i < len(pairs); i += 2 {
+				key, ok := pairs[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: key %v is not a string", pairs[i])
+				}
+				out[key] = pairs[i+1]
+			}
+			return out, nil
+		},
 		// isoDate value: "2025-01-02", for <time datetime>.
 		"isoDate": func(v interface{}) string {
 			t, ok := toTime(v)

@@ -362,7 +362,7 @@ Theme directory structure:
 If files are missing, the embedded fallback theme is used.
 
 
-Template functions, besides Go's own: `humanDate value lang` prints a frontmatter date as «4 марта 2025» for `ru` and «March 4, 2025» otherwise; `isoDate value` prints `2025-03-04` for `<time datetime>`. Both accept the string or date a note's `date` gives and print a non-date unchanged (`isoDate` prints nothing).
+Template functions, besides Go's own: `humanDate value lang` prints a frontmatter date as «4 марта 2025» for `ru` and «March 4, 2025» otherwise; `isoDate value` prints `2025-03-04` for `<time datetime>`; `dict "Key" value …` passes several values to one `{{ template }}` call. Both accept the string or date a note's `date` gives and print a non-date unchanged (`isoDate` prints nothing).
 
 ## Collections
 

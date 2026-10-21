@@ -18,7 +18,7 @@ All notable changes to this project are documented in this file.
 - `site.language`, the same value as the `site_language` setting.
 - Template functions `humanDate` (`{{ humanDate .Meta.Published "ru" }}` → «4 марта 2025», English
   otherwise) and `isoDate` (`2025-03-04`, for `<time datetime>`). They accept the strings and dates
-  frontmatter gives.
+  frontmatter gives. `dict "Key" value …` passes several values to one `{{ template }}` call.
 - `template check` reports whether pages are dated by commits and whether the build runs the SEO check.
 
 - Obsidian embeds find their file the way Obsidian does: next to the note, then from the content root,
