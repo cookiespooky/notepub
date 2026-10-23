@@ -98,6 +98,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleSearchPage(rec, r)
 	case s.cfg.Feed.Enabled && r.URL.Path == "/"+s.cfg.Feed.Path:
 		s.handleFeed(rec, r)
+	case s.cfg.LLMS.Enabled && r.URL.Path == "/"+s.cfg.LLMS.Path:
+		s.handleLLMS(rec, r)
 	case r.URL.Path == "/favicon.ico":
 		s.handleFavicon(rec, r)
 	default:
@@ -130,6 +132,22 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write(feed)
+}
+
+func (s *Server) handleLLMS(w http.ResponseWriter, r *http.Request) {
+	idx, _, err := s.store.GetWithWikiMapContext(r.Context())
+	if err != nil {
+		http.Error(w, "llms.txt unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	body, ok := RenderLLMS(idx, s.cfg, s.rules)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {

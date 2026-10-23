@@ -42,6 +42,8 @@ notepub index
 notepub serve
 notepub build
 notepub validate
+notepub audit --dist ./dist
+notepub type add service
 notepub template check
 notepub template update --apply
 notepub help
@@ -60,7 +62,17 @@ notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --res
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --markdown --markdown-format json
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --markdown --markdown-format json --output ./artifacts/markdown-diagnostics.json
 notepub validate --config /path/to/config.yaml --rules /path/to/rules.yaml --resolve ./artifacts/resolve.json --seo
+notepub audit --config /path/to/config.yaml --dist ./dist --strict
+notepub audit --dist ./dist --base-url https://example.com/docs/ --format json
+notepub type add service --permalink "/services/{{ slug }}/"
 ```
+
+### Adding a kind of page
+
+`notepub type add service` writes the type to `rules.yaml` — keeping its comments, order and indentation —
+and creates `theme/templates/service.html` from `page.html` (`--from` picks another, `--template` names the
+file; an existing template is kept). A note with `type: service` is then a page at
+`/service/<slug>/` (`--permalink` changes it). `--no-sitemap` and `--no-search` leave the type out of either.
 
 ## Template updates
 
@@ -233,6 +245,30 @@ feed:
   types: ["post"]         # default: article types
   limit: 20
 ```
+
+- `llms.txt`: `llms.enabled: true` writes it (llmstxt.org) from the notes — title, description, then the
+  indexed pages by type with their descriptions. `llms.sections` sets which types and in what order,
+  under which headings; `llms.limit` caps each section.
+
+```yaml
+llms:
+  enabled: true
+  intro: "Documentation of the engine."   # a paragraph under the title, optional
+  sections:
+    - type: article
+      title: Documentation
+    - type: service
+      title: Services
+```
+
+`notepub audit --dist ./dist` checks the built site, the way a crawler meets it, without network: every
+page's title, description, `<h1>` and heading levels, canonical, OpenGraph and the `og:image` size,
+favicon, viewport, JSON-LD, `alt`; links and images that lead nowhere or only through a redirect; pages no
+other page links to (menus included); `robots.txt`, the sitemap against the build, `llms.txt`, `404.html`,
+an analytics counter. Errors (a broken link, a sitemap address with no page, a missing title, JSON-LD that
+does not parse) fail it; `--strict` fails on warnings too. It needs the base URL the site will be served
+at: from `--config` (`site.base_url`) or `--base-url`. What only the host decides — HTTPS, response
+headers, www redirects — is outside it.
 
 `validate --seo` reads `resolve.json` and reports what costs a page its place in results and can be fixed in the note: a missing, long (over 70 characters) or repeated title; a missing, short (under 50) or long (over 200) description, or one repeated on another page; a page no note links to and that links to no note (information only: the theme's menu is not seen); `robots-under-path`, when the site lives under a path such as `/docs/`, where crawlers never read its `robots.txt`; `lastmod-uniform` (information), when every page has the same date and no note sets one. `--seo-strict` fails on warnings, `--seo-format json` prints JSON.
 

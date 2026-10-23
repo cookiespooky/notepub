@@ -96,6 +96,7 @@ func buildCollectionItem(idx models.ResolveIndex, pathVal string) models.Collect
 	route := idx.Routes[pathVal]
 	return models.CollectionItem{
 		Path:        pathVal,
+		PublicPath:  urlutil.PublicPath(pathVal),
 		Type:        meta.Type,
 		Slug:        meta.Slug,
 		Title:       meta.Title,

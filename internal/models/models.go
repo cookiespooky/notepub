@@ -114,7 +114,10 @@ type CollectionGroup struct {
 }
 
 type CollectionItem struct {
-	Path        string                 `json:"path"`
+	Path string `json:"path"`
+	// PublicPath is Path as a visitor reaches it, with the trailing slash:
+	// {{ printf "%s%s" $.BaseURL .PublicPath }} links without a redirect.
+	PublicPath  string                 `json:"public_path,omitempty"`
 	Type        string                 `json:"type,omitempty"`
 	Slug        string                 `json:"slug,omitempty"`
 	Title       string                 `json:"title,omitempty"`

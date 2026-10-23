@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cookiespooky/notepub/internal/urlutil"
 	"github.com/gosimple/slug"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -141,6 +142,9 @@ func buildWikiLink(targetRaw string, wikiMap map[string]string, baseURL string) 
 	if !ok {
 		return display
 	}
+	// Route keys are stored without the trailing slash; the page itself is
+	// served at <path>/, so a link to the key would only redirect there.
+	pathVal = urlutil.PublicPath(pathVal)
 	if heading != "" {
 		if strings.HasPrefix(heading, "^") {
 			pathVal += "#" + heading

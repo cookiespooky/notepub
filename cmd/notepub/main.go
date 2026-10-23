@@ -73,6 +73,10 @@ func run() int {
 		err = validateCmd(args)
 	case "template":
 		err = templateCmd(args)
+	case "audit":
+		err = auditCmd(args)
+	case "type":
+		err = typeCmd(args)
 	default:
 		err = usageError(fmt.Sprintf("unknown command: %s", cmd), usageWriter)
 	}
@@ -496,6 +500,8 @@ func usageWriter(w io.Writer) {
 	fmt.Fprintln(w, "notepub serve --addr :8081")
 	fmt.Fprintln(w, "notepub build --dist ./dist")
 	fmt.Fprintln(w, "notepub validate")
+	fmt.Fprintln(w, "notepub audit --dist ./dist")
+	fmt.Fprintln(w, "notepub type add <name>")
 	fmt.Fprintln(w, "notepub template check")
 	fmt.Fprintln(w, "notepub template update --apply")
 	fmt.Fprintln(w, "notepub version")
@@ -521,6 +527,12 @@ func helpCmd(args []string) {
 		newValidateUsageWriter(fs)(os.Stdout)
 	case "template":
 		templateUsageWriter(os.Stdout)
+	case "audit":
+		fs, _, _, _, _, _ := newAuditFlagSet()
+		newAuditUsageWriter(fs)(os.Stdout)
+	case "type":
+		fs, _ := newTypeAddFlagSet()
+		typeUsageWriter(fs)(os.Stdout)
 	default:
 		usageWriter(os.Stdout)
 	}

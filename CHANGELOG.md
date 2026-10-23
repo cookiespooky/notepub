@@ -2,6 +2,37 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.10 - 2026-10-23
+
+### Added
+
+- `notepub audit --dist ./dist`: checks the built site against an SEO checklist, without network — what
+  only the finished pages show, menus and templates included. Per page: title and description (missing,
+  long, repeated), one `<h1>` and no skipped heading level, canonical (missing, relative, another host),
+  OpenGraph tags and an `og:image` smaller than 1200×630, favicon, viewport, JSON-LD that does not parse,
+  images without `alt`, heavy HTML and images, thin text. Links and images that lead nowhere or reach the
+  page only through a redirect (no trailing slash), pages no other page links to. Site files:
+  `robots.txt` and its sitemap line, every sitemap address against the build, `noindex` pages in the
+  sitemap, indexable pages missing from it, `llms.txt` and its links, a `404.html` that is not a full
+  document, no analytics counter. Errors fail the command, `--strict` fails on warnings too,
+  `--format json` prints JSON. Search console verification files are skipped; on a site at the domain root,
+  a link into a folder the build never wrote is reported as another site under the domain (information).
+- `llms.txt` (llmstxt.org) written by `build` and answered by `serve` with `llms.enabled: true`: the site's
+  title and description, then indexed pages by type (`llms.sections` sets the order and headings,
+  `llms.limit` the count), each a link with its description. Made from the notes on every build, so it
+  does not go stale like a hand-written file. Off by default: sites that write their own are left alone.
+- `notepub type add <name>`: adds a kind of page in one command — the type in `rules.yaml` (comments,
+  order and indentation kept; `--permalink`, `--no-sitemap`, `--no-search`) and its template copied from
+  `page.html` (`--from`, `--template`); an existing template is never overwritten.
+- `.PublicPath` on collection items: the item's address with its trailing slash, for links without a
+  redirect (`{{ printf "%s%s" $.BaseURL .PublicPath }}`). `.Path` stays as it was.
+
+### Fixed
+
+- `[[wikilinks]]` and embeds pointed at the route without its trailing slash (`/docs/page`): on GitHub
+  Pages and other static hosts every such link answered with a 301 to `/docs/page/`. They now link to the
+  address the page is served at, as canonical and the sitemap already did.
+
 ## v0.1.9 - 2026-10-22
 
 ### Added

@@ -27,7 +27,7 @@ func TestMarkdownWikiLinksUseBaseURL(t *testing.T) {
 		t.Fatalf("render error: %v", err)
 	}
 	html := postprocessRenderedHTML(b.String())
-	if !strings.Contains(html, `href="https://example.com/docs/note"`) {
+	if !strings.Contains(html, `href="https://example.com/docs/note/"`) {
 		t.Fatalf("wikilink did not use base URL: %s", html)
 	}
 }
@@ -63,7 +63,7 @@ func TestMarkdownCalloutAndEmbedRender(t *testing.T) {
 	if !strings.Contains(html, "class=\"obsidian-embed\"") {
 		t.Fatalf("embed not rendered: %s", html)
 	}
-	if !strings.Contains(html, "href=\"/note\"") {
+	if !strings.Contains(html, "href=\"/note/\"") {
 		t.Fatalf("embed link not resolved: %s", html)
 	}
 }

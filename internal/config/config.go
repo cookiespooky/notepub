@@ -37,6 +37,7 @@ type Config struct {
 	Media        MediaConfig       `yaml:"media"`
 	SEO          SEOConfig         `yaml:"seo"`
 	Feed         FeedConfig        `yaml:"feed"`
+	LLMS         LLMSConfig        `yaml:"llms"`
 	RulesPath    string            `yaml:"rules_path"`
 	Settings     map[string]string `yaml:"settings"`
 }
@@ -61,6 +62,25 @@ type FeedConfig struct {
 	Path        string   `yaml:"path"`
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description"`
+}
+
+// LLMSConfig turns on llms.txt (llmstxt.org): the site's pages as a Markdown
+// list for language models, written by build and served by serve.
+type LLMSConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
+	// Intro is a paragraph under the title and description.
+	Intro string `yaml:"intro"`
+	// Sections lists the content types in the order they appear, each under
+	// its own heading; empty means every indexed type, by type name.
+	Sections []LLMSSection `yaml:"sections"`
+	// Limit caps the pages listed per section (0 = all).
+	Limit int `yaml:"limit"`
+}
+
+type LLMSSection struct {
+	Type  string `yaml:"type"`
+	Title string `yaml:"title"`
 }
 
 type SiteConfig struct {
@@ -307,6 +327,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Feed.Limit <= 0 {
 		cfg.Feed.Limit = 20
 	}
+	if cfg.LLMS.Path == "" {
+		cfg.LLMS.Path = "llms.txt"
+	}
+	cfg.LLMS.Path = strings.TrimLeft(strings.TrimSpace(cfg.LLMS.Path), "/")
 }
 
 func normalizeBaseURL(baseURL string) string {

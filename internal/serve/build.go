@@ -167,6 +167,12 @@ func Build(ctx context.Context, cfg config.Config, rulesCfg rules.Rules, opts Bu
 		}
 	}
 
+	if llms, ok := RenderLLMS(idx, cfg, rulesCfg); ok {
+		if err := writeFile(filepath.Join(distDir, filepath.FromSlash(cfg.LLMS.Path)), llms); err != nil {
+			return err
+		}
+	}
+
 	notFound, err := theme.RenderNotFound(cfg.Site.BaseURL, cfg.Settings)
 	if err != nil {
 		notFound = "Not Found"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cookiespooky/notepub/internal/models"
 	"github.com/cookiespooky/notepub/internal/rules"
+	"github.com/cookiespooky/notepub/internal/urlutil"
 )
 
 func materializeCollections(artifactsDir string, idx models.ResolveIndex, cfg rules.Rules) error {
@@ -112,6 +113,7 @@ func buildCollectionItem(idx models.ResolveIndex, pathVal string) models.Collect
 	route := idx.Routes[pathVal]
 	return models.CollectionItem{
 		Path:        pathVal,
+		PublicPath:  urlutil.PublicPath(pathVal),
 		Type:        meta.Type,
 		Slug:        meta.Slug,
 		Title:       meta.Title,
