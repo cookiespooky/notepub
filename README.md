@@ -287,7 +287,7 @@ GitHub Release publishes cross-platform binaries from `.github/workflows/release
 Usage example (Linux amd64):
 
 ```bash
-NOTEPUB_VERSION=v0.1.9
+NOTEPUB_VERSION=v0.1.10
 curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_linux_amd64
 chmod +x notepub
 ./notepub validate --config ./config.yaml --rules ./rules.yaml
@@ -297,7 +297,7 @@ chmod +x notepub
 macOS Apple Silicon:
 
 ```bash
-NOTEPUB_VERSION=v0.1.9
+NOTEPUB_VERSION=v0.1.10
 curl -L -o notepub https://github.com/cookiespooky/notepub/releases/download/${NOTEPUB_VERSION}/notepub_darwin_arm64
 chmod +x notepub
 ./notepub version
@@ -306,7 +306,7 @@ chmod +x notepub
 Windows PowerShell:
 
 ```powershell
-$env:NOTEPUB_VERSION="v0.1.9"
+$env:NOTEPUB_VERSION="v0.1.10"
 Invoke-WebRequest -Uri "https://github.com/cookiespooky/notepub/releases/download/$env:NOTEPUB_VERSION/notepub_windows_amd64.exe" -OutFile ".\notepub.exe"
 .\notepub.exe version
 ```
